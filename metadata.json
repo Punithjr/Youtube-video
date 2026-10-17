@@ -1,0 +1,6 @@
+{
+  "name": "Creator Studio",
+  "description": "Social Media Creator Studio for YouTube, Instagram, and Facebook with scripts, reels, calendar, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
