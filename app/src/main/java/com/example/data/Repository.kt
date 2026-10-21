@@ -10,6 +10,10 @@ class CreatorRepository(private val db: AppDatabase) {
     val savedScripts: Flow<List<SavedScriptEntity>> = db.savedScriptDao().getAllScripts()
     val autoVideoJobs: Flow<List<AutoVideoJobEntity>> = db.autoVideoJobDao().getAllJobs()
     val promptTemplates: Flow<List<PromptTemplateEntity>> = db.promptTemplateDao().getAllPrompts()
+    val allVideos: Flow<List<VideoMetadataEntity>> = db.videoMetadataDao().getAllVideos()
+    val draftVideos: Flow<List<VideoMetadataEntity>> = db.videoMetadataDao().getDraftVideos()
+    val draftCount: Flow<Int> = db.videoMetadataDao().getDraftCount()
+    val mangaStories: Flow<List<MangaStoryEntity>> = db.mangaStoryDao().getAllStories()
 
     suspend fun getSettingsOnce(): CreatorSettingsEntity? = db.settingsDao().getSettingsOnce()
 
@@ -96,4 +100,52 @@ class CreatorRepository(private val db: AppDatabase) {
     suspend fun incrementPromptUsage(id: Long) {
         db.promptTemplateDao().incrementUsage(id)
     }
+
+    suspend fun getVideoById(id: Long): VideoMetadataEntity? = db.videoMetadataDao().getVideoById(id)
+
+    fun getVideoByIdFlow(id: Long): Flow<VideoMetadataEntity?> = db.videoMetadataDao().getVideoByIdFlow(id)
+
+    suspend fun saveVideo(video: VideoMetadataEntity): Long = db.videoMetadataDao().insertVideo(video)
+
+    suspend fun updateVideo(video: VideoMetadataEntity) = db.videoMetadataDao().updateVideo(video)
+
+    suspend fun updateVideoDraftStatus(id: Long, newStatus: String, isDraft: Boolean = (newStatus != "Published")) =
+        db.videoMetadataDao().updateDraftStatus(id, newStatus, isDraft)
+
+    suspend fun updateVideoMetadata(id: Long, title: String, description: String) =
+        db.videoMetadataDao().updateMetadata(id, title, description)
+
+    suspend fun deleteVideo(video: VideoMetadataEntity) = db.videoMetadataDao().deleteVideo(video)
+
+    suspend fun deleteVideoById(id: Long) = db.videoMetadataDao().deleteVideoById(id)
+
+    suspend fun clearAllDrafts() = db.videoMetadataDao().clearAllDrafts()
+
+    // Manga Stories & Chapters
+    fun getChaptersForStory(storyId: Long): Flow<List<MangaChapterEntity>> = db.mangaChapterDao().getChaptersForStory(storyId)
+
+    fun getStoryById(id: Long): Flow<MangaStoryEntity?> = db.mangaStoryDao().getStoryById(id)
+
+    suspend fun getStoryByIdOnce(id: Long): MangaStoryEntity? = db.mangaStoryDao().getStoryByIdOnce(id)
+
+    suspend fun addMangaStory(story: MangaStoryEntity): Long = db.mangaStoryDao().insertStory(story)
+
+    suspend fun updateMangaStory(story: MangaStoryEntity) = db.mangaStoryDao().updateStory(story)
+
+    suspend fun deleteMangaStory(story: MangaStoryEntity) {
+        db.mangaChapterDao().deleteChaptersForStory(story.id)
+        db.mangaStoryDao().deleteStory(story)
+    }
+
+    fun getChapterById(id: Long): Flow<MangaChapterEntity?> = db.mangaChapterDao().getChapterById(id)
+
+    suspend fun getChapterByIdOnce(id: Long): MangaChapterEntity? = db.mangaChapterDao().getChapterByIdOnce(id)
+
+    suspend fun addMangaChapter(chapter: MangaChapterEntity): Long = db.mangaChapterDao().insertChapter(chapter)
+
+    suspend fun updateMangaChapter(chapter: MangaChapterEntity) = db.mangaChapterDao().updateChapter(chapter)
+
+    suspend fun deleteMangaChapter(chapter: MangaChapterEntity) = db.mangaChapterDao().deleteChapter(chapter)
 }
+
+

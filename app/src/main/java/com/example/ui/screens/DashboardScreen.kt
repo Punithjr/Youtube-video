@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.example.data.AutoVideoJobEntity
 import com.example.data.CalendarTaskEntity
 import com.example.data.ContentProjectEntity
 import com.example.data.CreatorSettingsEntity
@@ -33,6 +35,7 @@ import com.example.ui.components.PlatformBadge
 import com.example.ui.components.ProjectStatusBadge
 import com.example.ui.components.QuickActionsBar
 import com.example.ui.components.TaskStatusBadge
+import com.example.ui.components.VideoPlayerView
 import com.example.ui.theme.*
 
 @Composable
@@ -41,11 +44,13 @@ fun DashboardScreen(
     currentLanguage: String,
     projects: List<ContentProjectEntity>,
     calendarTasks: List<CalendarTaskEntity>,
+    autoVideoJobs: List<AutoVideoJobEntity> = emptyList(),
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val isKn = currentLanguage == I18n.LANG_KN
+    var previewVideoJob by remember { mutableStateOf<AutoVideoJobEntity?>(null) }
 
     fun openBrowserUrl(url: String, service: String) {
         val trimmed = url.trim()
@@ -198,6 +203,52 @@ fun DashboardScreen(
                                 )
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { onNavigate("manga_studio") },
+                                colors = ButtonDefaults.buttonColors(containerColor = StudioCrimson),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("hero_manga_studio_button")
+                            ) {
+                                Icon(Icons.Default.AutoStories, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isKn) "📖 ಮಂಗಾ ಸ್ಟುಡಿಯೋ AI" else "📖 MANGA STORY STUDIO",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            FilledTonalButton(
+                                onClick = { onNavigate("auto_generator") },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color.White.copy(alpha = 0.2f),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("hero_auto_video_button")
+                            ) {
+                                Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isKn) "⚡ ಆಟೋ ವೀಡಿಯೊ" else "⚡ 10-MIN AUTO VIDEO",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -316,14 +367,82 @@ fun DashboardScreen(
             }
         }
 
-        // 4. Quick Actions Bar (Mandated in user request for one-click access to Script, Caption, Hashtags)
+        // 4. Quick Actions Bar (Mandated in user request for one-click access to Script, Caption, Hashtags, and GitHub Sync)
         item {
             QuickActionsBar(
                 currentLanguage = currentLanguage,
                 onOpenScriptGenerator = { onNavigate("script_gen") },
                 onOpenCaptionGenerator = { onNavigate("instagram") },
-                onOpenHashtagGenerator = { onNavigate("ai_tools") }
+                onOpenHashtagGenerator = { onNavigate("ai_tools") },
+                onOpenGitHubSync = { onNavigate("github_link") }
             )
+        }
+
+        // GitHub Data Link Card on Dashboard
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigate("github_link") }
+                    .testTag("dashboard_github_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF24292E)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Code, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = if (isKn) "ಗಿಟ್‌ಹಬ್ ಡೇಟಾ ಲಿಂಕ್" else "GITHUB DATA LINK",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF2EA44F).copy(alpha = 0.15f))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text("SYNC READY", fontSize = 8.sp, fontWeight = FontWeight.Black, color = Color(0xFF2EA44F))
+                                }
+                            }
+                            Text(
+                                text = "Repo: ${settings.gitHubUsername}/${settings.gitHubRepo} (${settings.gitHubBranch}) • Last synced: ${settings.gitHubLastSync}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = { onNavigate("github_link") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24292E)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp).testTag("dashboard_open_github_sync")
+                    ) {
+                        Text(if (isKn) "ಸಿಂಕ್ ಮಾಡಿ" else "Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
 
         // 4. Live DB Metrics Summary
@@ -370,7 +489,10 @@ fun DashboardScreen(
         // Studio Tool Grid Cards
         item {
             val toolCards = listOf(
+                StudioTool("manga_studio", if (isKn) "📖 ಮಂಗಾ ಸ್ಟುಡಿಯೋ AI" else "📖 Manga Story Studio", "Manga stories, chapters, audio, video & slides", StudioCrimson, Icons.Default.AutoStories),
                 StudioTool("auto_generator", if (isKn) "⚡ ಆಟೋ ವೀಡಿಯೊ" else "⚡ 10-Min Auto Video", "Automated scheduler, prompts & auto-upload", StudioCrimson, Icons.Default.Bolt),
+                StudioTool("video_editor", if (isKn) "🎬 ವೀಡಿಯೊ ಎಡಿಟರ್ & AI" else "🎬 Video Editor & AI", "Media3 PlayerView live preview, AI timeline", StudioCrimson, Icons.Default.MovieFilter),
+                StudioTool("github_link", if (isKn) "🐙 ಗಿಟ್‌ಹಬ್ ಡೇಟಾ ಲಿಂಕ್" else "🐙 GitHub Data Link", "Sync app projects, scripts & calendar to Git", Color(0xFF24292E), Icons.Default.Code),
                 StudioTool("create_video", I18n.t("card_create_video", currentLanguage), "16:9 Long-Form, scene breakdown, music", StudioPurple, Icons.Default.MovieCreation),
                 StudioTool("shorts_reels", I18n.t("card_shorts_reels", currentLanguage), "9:16 Vertical, hook retention, 30s/60s", StudioCyan, Icons.Default.Smartphone),
                 StudioTool("thumbnail_creator", I18n.t("card_thumbnail", currentLanguage), "Visual Canvas preview, badges, export", StudioAmber, Icons.Default.Image),
@@ -515,6 +637,218 @@ fun DashboardScreen(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     ProjectStatusBadge(status = project.status)
+                }
+            }
+        }
+
+        // 8. Previously Generated Videos & Past Content Feed (MongoDB & AI Generator Tracking)
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(StudioCrimson)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isKn) "ಹಿಂದೆ ರಚಿಸಲಾದ ವೀಡಿಯೊಗಳು (Past Generated Content)"
+                        else "PREVIOUSLY GENERATED VIDEOS (${autoVideoJobs.size})",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                TextButton(onClick = { onNavigate("auto_generator") }) {
+                    Text(text = if (isKn) "ಎಲ್ಲಾ ವೀಡಿಯೊಗಳು" else "View All / Generator", fontSize = 12.sp)
+                }
+            }
+        }
+
+        if (autoVideoJobs.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth().testTag("empty_past_content_card"),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.MovieFilter, contentDescription = null, tint = StudioCrimson, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (isKn) "ಇನ್ನೂ ಯಾವುದೇ ವೀಡಿಯೊ ರಚಿಸಲಾಗಿಲ್ಲ" else "No Videos Generated Yet",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isKn) "ವೀಡಿಯೊ ರಚಿಸಲು 'ವೀಡಿಯೊ ಎಡಿಟರ್' ಅಥವಾ '10-ನಿಮಿಷದ ಆಟೋ ವೀಡಿಯೊ' ಬಳಸಿ"
+                            else "Click 'Video Editor & AI' or '10-Min Auto Video' above to generate your first video.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        items(autoVideoJobs.take(5)) { job ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { previewVideoJob = job }
+                    .testTag("dashboard_past_video_${job.id}"),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = job.title,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = "${job.platform} • ${job.format} • ${job.durationSec}s",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (job.description.isNotBlank()) {
+                            Text(
+                                text = job.description.take(80) + "...",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (job.status == "Uploaded") Color(0xFF2EA44F).copy(alpha = 0.15f) else StudioCrimson.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = job.status.uppercase(),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                color = if (job.status == "Uploaded") Color(0xFF2EA44F) else StudioCrimson,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        IconButton(
+                            onClick = { previewVideoJob = job },
+                            modifier = Modifier.size(32.dp).testTag("preview_job_${job.id}")
+                        ) {
+                            Icon(Icons.Default.PlayCircle, contentDescription = "Preview", tint = StudioCrimson, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal to preview previously generated video with VideoPlayerView
+    if (previewVideoJob != null) {
+        val job = previewVideoJob!!
+        Dialog(onDismissRequest = { previewVideoJob = null }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth().testTag("dashboard_video_preview_dialog")
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = job.title,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = "${job.platform} • ${job.format} • Status: ${job.status}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { previewVideoJob = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+
+                    VideoPlayerView(
+                        videoUri = if (job.uploadUrl.startsWith("http") && job.uploadUrl.endsWith(".mp4")) job.uploadUrl else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                        title = job.title,
+                        aspectRatio = if (job.format.contains("9:16")) 9f / 16f else 16f / 9f,
+                        autoPlay = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (job.scriptText.isNotBlank()) {
+                        Text(
+                            text = "Generated AI Script:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = job.scriptText.take(180) + if (job.scriptText.length > 180) "..." else "",
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(8.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (job.uploadUrl.isNotBlank()) {
+                        Button(
+                            onClick = { openBrowserUrl(job.uploadUrl, job.platform) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Open on ${job.platform}", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

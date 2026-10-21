@@ -28,7 +28,11 @@ import com.example.data.CreatorSettingsEntity
 import com.example.generator.ContentGenerator
 import com.example.i18n.I18n
 import com.example.ui.components.UploadPublishDialog
+import com.example.ui.components.VideoGenerationProgressIndicator
+import com.example.ui.components.VideoPlayerView
 import com.example.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun VideoCreatorScreen(
@@ -36,9 +40,12 @@ fun VideoCreatorScreen(
     settings: CreatorSettingsEntity = CreatorSettingsEntity(),
     onSaveProject: (ContentProjectEntity) -> Unit,
     onPublishSuccess: (CalendarTaskEntity) -> Unit = {},
+    onShowGlobalProgress: (title: String, subtitle: String, actionType: String, progress: Float?, onCancel: (() -> Unit)?) -> Unit = { _, _, _, _, _ -> },
+    onHideGlobalProgress: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val isKn = currentLanguage == I18n.LANG_KN
 
@@ -49,6 +56,10 @@ fun VideoCreatorScreen(
     var voiceStyle by remember { mutableStateOf("Deep & Storyteller") }
     var musicStyle by remember { mutableStateOf("Ambient Lo-Fi 95 BPM") }
     var showUploadDialog by remember { mutableStateOf(false) }
+
+    var isGenerating by remember { mutableStateOf(false) }
+    var progressStatusText by remember { mutableStateOf("") }
+    var progressStepText by remember { mutableStateOf("") }
 
     var videoPlan by remember {
         mutableStateOf(
@@ -61,22 +72,56 @@ fun VideoCreatorScreen(
     }
 
     fun handleGenerateStandard() {
-        videoPlan = ContentGenerator.generateVideoPlan(
-            topic = topic,
-            style = selectedStyle,
-            language = currentLanguage
-        )
-        Toast.makeText(context, "Video production plan generated!", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            isGenerating = true
+            progressStatusText = "Generating video plan & storyboard..."
+            progressStepText = "Step 1 of 2: Analyzing hooks & writing script"
+            onShowGlobalProgress(
+                "AI Video Engine API Request",
+                "Analyzing audience hooks & generating video production plan...",
+                "generate",
+                0.3f
+            ) {
+                isGenerating = false
+                onHideGlobalProgress()
+            }
+            delay(800)
+            videoPlan = ContentGenerator.generateVideoPlan(
+                topic = topic,
+                style = selectedStyle,
+                language = currentLanguage
+            )
+            isGenerating = false
+            onHideGlobalProgress()
+            Toast.makeText(context, "Video production plan generated!", Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun handleGenerateTenMinute() {
-        duration = "10 Minutes"
-        videoPlan = ContentGenerator.generateTenMinuteVideoPlan(
-            topic = topic,
-            style = selectedStyle,
-            language = currentLanguage
-        )
-        Toast.makeText(context, "Full 10-Minute Masterclass Generated with 10 Scenes!", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            isGenerating = true
+            duration = "10 Minutes"
+            progressStatusText = "Generating 10-Minute Masterclass with 10 Scenes..."
+            progressStepText = "Synthesizing AI visual cues, voiceovers & B-Roll"
+            onShowGlobalProgress(
+                "AI Video Masterclass API Request",
+                "Synthesizing 10 scenes, AI visual cues, voiceovers & B-Roll...",
+                "generate",
+                0.45f
+            ) {
+                isGenerating = false
+                onHideGlobalProgress()
+            }
+            delay(1000)
+            videoPlan = ContentGenerator.generateTenMinuteVideoPlan(
+                topic = topic,
+                style = selectedStyle,
+                language = currentLanguage
+            )
+            isGenerating = false
+            onHideGlobalProgress()
+            Toast.makeText(context, "Full 10-Minute Masterclass Generated with 10 Scenes!", Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun handleSaveProject() {
@@ -154,6 +199,17 @@ Hashtags: ${videoPlan.hashtags}
                 text = if (isKn) "ದೀರ್ಘಾವಧಿ 16:9 ವೀಡಿಯೊ ಯೋಜನೆ, ದೃಶ್ಯ ವಿಭಜನೆ ಮತ್ತು B-Roll" else "16:9 Long-form video planner, scene-by-scene script & production package",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Circular progress indicator during video generation
+        item {
+            VideoGenerationProgressIndicator(
+                isVisible = isGenerating,
+                statusText = progressStatusText,
+                stepText = progressStepText,
+                actionType = "generate",
+                onCancel = { isGenerating = false }
             )
         }
 
@@ -329,7 +385,27 @@ Hashtags: ${videoPlan.hashtags}
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Media3 VideoPlayerView to preview generated content
+                    Text(
+                        text = "Interactive Video Player Preview (Media3 PlayerView)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Spacer(modifier = Modifier.height(4.dp))
+                    VideoPlayerView(
+                        videoUri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                        title = videoPlan.title,
+                        aspectRatio = 16f / 9f,
+                        sceneMarkers = videoPlan.scenes.take(5).map { "S${it.sceneNumber}" },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("creator_video_player")
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Action buttons
                     Row(

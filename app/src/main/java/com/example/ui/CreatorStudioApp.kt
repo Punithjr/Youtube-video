@@ -7,10 +7,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.CreatorSettingsEntity
 import com.example.i18n.I18n
 import com.example.ui.components.AccountLoginDialog
+import com.example.ui.components.GlobalVideoProgressOverlay
 import com.example.ui.components.SidebarDrawerContent
 import com.example.ui.components.TopHeaderBar
 import com.example.ui.components.UserLoginDialog
@@ -37,6 +39,9 @@ fun CreatorStudioApp(
     val isAutoSchedulerActive by viewModel.isAutoSchedulerActive.collectAsStateWithLifecycle()
     val countdownSeconds by viewModel.countdownSeconds.collectAsStateWithLifecycle()
     val isGeneratingNow by viewModel.isGeneratingNow.collectAsStateWithLifecycle()
+    val globalLoadingState by viewModel.globalLoadingState.collectAsStateWithLifecycle()
+    val allVideos by viewModel.allVideos.collectAsStateWithLifecycle()
+    val mangaStories by viewModel.mangaStories.collectAsStateWithLifecycle()
     val currentRoute by viewModel.currentRoute.collectAsStateWithLifecycle()
 
     var showWizardDialog by remember { mutableStateOf(false) }
@@ -67,66 +72,50 @@ fun CreatorStudioApp(
     val currentLang = settings.defaultLanguage
     val isDark = settings.theme == "dark"
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            SidebarDrawerContent(
-                currentRoute = currentRoute,
-                currentLanguage = currentLang,
-                creatorName = settings.channelName,
-                creatorEmail = settings.youTubeEmail,
-                onOpenUserLogin = {
-                    showUserLoginDialog = true
-                    scope.launch { drawerState.close() }
-                },
-                onSelectRoute = { route ->
-                    viewModel.navigateTo(route)
-                    scope.launch { drawerState.close() }
-                }
-            )
-        }
-    ) {
-        Scaffold(
-            topBar = {
-                TopHeaderBar(
-                    settings = settings,
-                    currentLanguage = currentLang,
-                    isDarkTheme = isDark,
-                    onToggleLanguage = {
-                        val nextLang = if (currentLang == I18n.LANG_KN) I18n.LANG_EN else I18n.LANG_KN
-                        viewModel.saveSettings(settings.copy(defaultLanguage = nextLang))
-                    },
-                    onToggleTheme = {
-                        val nextTheme = if (isDark) "light" else "dark"
-                        viewModel.saveSettings(settings.copy(theme = nextTheme))
-                    },
-                    onOpenNavDrawer = {
-                        scope.launch { drawerState.open() }
-                    },
-                    onOpenSettings = {
-                        viewModel.navigateTo("settings")
-                    },
-                    onOpenUserLogin = {
-                        showUserLoginDialog = true
-                    },
-                    onOpenPlatformLogin = { platform ->
-                        selectedPlatformForLogin = platform
-                    }
-                )
+    val topBarContent: @Composable () -> Unit = {
+        TopHeaderBar(
+            settings = settings,
+            currentLanguage = currentLang,
+            isDarkTheme = isDark,
+            onToggleLanguage = {
+                val nextLang = if (currentLang == I18n.LANG_KN) I18n.LANG_EN else I18n.LANG_KN
+                viewModel.saveSettings(settings.copy(defaultLanguage = nextLang))
             },
-            modifier = modifier.fillMaxSize()
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                when (currentRoute) {
-                    "dashboard" -> DashboardScreen(
+            onToggleTheme = {
+                val nextTheme = if (isDark) "light" else "dark"
+                viewModel.saveSettings(settings.copy(theme = nextTheme))
+            },
+            onOpenNavDrawer = {
+                scope.launch { drawerState.open() }
+            },
+            onOpenSettings = {
+                viewModel.navigateTo("settings")
+            },
+            onOpenUserLogin = {
+                showUserLoginDialog = true
+            },
+            onOpenPlatformLogin = { platform ->
+                selectedPlatformForLogin = platform
+            },
+            onOpenGitHubLink = {
+                viewModel.navigateTo("github_link")
+            }
+        )
+    }
+
+    val screensContent: @Composable (PaddingValues) -> Unit = { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            when (currentRoute) {
+                "dashboard" -> DashboardScreen(
                         settings = settings,
                         currentLanguage = currentLang,
                         projects = projects,
                         calendarTasks = calendarTasks,
+                        autoVideoJobs = autoVideoJobs,
                         onNavigate = { route -> viewModel.navigateTo(route) }
                     )
 
@@ -154,12 +143,20 @@ fun CreatorStudioApp(
                         currentLanguage = currentLang,
                         settings = settings,
                         onSaveProject = { viewModel.addProject(it) },
-                        onPublishSuccess = { task -> viewModel.addCalendarTask(task) }
+                        onPublishSuccess = { task -> viewModel.addCalendarTask(task) },
+                        onShowGlobalProgress = { title, sub, action, prog, cancel ->
+                            viewModel.showGlobalVideoProgress(title, sub, action, prog, cancel)
+                        },
+                        onHideGlobalProgress = { viewModel.hideGlobalVideoProgress() }
                     )
 
                     "shorts_reels" -> ShortsReelsScreen(
                         currentLanguage = currentLang,
-                        onSaveProject = { viewModel.addProject(it) }
+                        onSaveProject = { viewModel.addProject(it) },
+                        onShowGlobalProgress = { title, sub, action, prog, cancel ->
+                            viewModel.showGlobalVideoProgress(title, sub, action, prog, cancel)
+                        },
+                        onHideGlobalProgress = { viewModel.hideGlobalVideoProgress() }
                     )
 
                     "script_gen" -> ScriptGeneratorScreen(
@@ -233,7 +230,53 @@ fun CreatorStudioApp(
                         settings = settings,
                         currentLanguage = currentLang,
                         onNavigateToSettings = { viewModel.navigateTo("settings") },
-                        onOpenPlatformLogin = { platform -> selectedPlatformForLogin = platform }
+                        onOpenPlatformLogin = { platform -> selectedPlatformForLogin = platform },
+                        onNavigateToRoute = { route -> viewModel.navigateTo(route) }
+                    )
+
+                    "video_editor" -> VideoEditorScreen(
+                        currentLanguage = currentLang,
+                        settings = settings,
+                        videoDrafts = allVideos,
+                        onSaveProject = { viewModel.addProject(it) },
+                        onSaveVideoDraft = { viewModel.saveVideo(it) },
+                        onUpdateDraftStatus = { id, st -> viewModel.updateVideoDraftStatus(id, st) },
+                        onDeleteDraft = { viewModel.deleteVideo(it) },
+                        onScheduleTask = { viewModel.addCalendarTask(it) },
+                        onShowGlobalProgress = { title, sub, action, prog, cancel ->
+                            viewModel.showGlobalVideoProgress(title, sub, action, prog, cancel)
+                        },
+                        onUpdateGlobalProgress = { prog, sub ->
+                            viewModel.updateGlobalVideoProgress(prog, sub)
+                        },
+                        onHideGlobalProgress = { viewModel.hideGlobalVideoProgress() }
+                    )
+
+                    "manga_studio" -> MangaStudioScreen(
+                        currentLanguage = currentLang,
+                        stories = mangaStories,
+                        onGetChapters = { storyId -> viewModel.getChaptersForStory(storyId) },
+                        onCreateStory = { viewModel.addMangaStory(it) },
+                        onUpdateStory = { viewModel.updateMangaStory(it) },
+                        onDeleteStory = { viewModel.deleteMangaStory(it) },
+                        onCreateChapter = { viewModel.addMangaChapter(it) },
+                        onUpdateChapter = { viewModel.updateMangaChapter(it) },
+                        onDeleteChapter = { viewModel.deleteMangaChapter(it) },
+                        onGenerateAudio = { ch, cb -> viewModel.generateChapterAudio(ch, cb) },
+                        onGenerateVideo = { ch, cb -> viewModel.generateChapterVideo(ch, cb) },
+                        onGenerateSlideDeck = { ch, cb -> viewModel.generateChapterSlideDeck(ch, cb) },
+                        onGenerateFlashcards = { ch, cb -> viewModel.generateChapterFlashcards(ch, cb) },
+                        onGenerateInfographic = { ch, cb -> viewModel.generateChapterInfographic(ch, cb) },
+                        onGenerateReport = { ch, cb -> viewModel.generateChapterReport(ch, cb) }
+                    )
+
+                    "github_link" -> GitHubLinkScreen(
+                        settings = settings,
+                        currentLanguage = currentLang,
+                        projects = projects,
+                        calendarTasks = calendarTasks,
+                        savedScripts = savedScripts,
+                        onSaveSettings = { viewModel.saveSettings(it) }
                     )
 
                     "backup_restore" -> BackupRestoreScreen(
@@ -258,8 +301,69 @@ fun CreatorStudioApp(
                         currentLanguage = currentLang,
                         projects = projects,
                         calendarTasks = calendarTasks,
+                        autoVideoJobs = autoVideoJobs,
                         onNavigate = { route -> viewModel.navigateTo(route) }
                     )
+                }
+
+                // Global CircularProgressIndicator overlay in the UI that displays
+                // whenever an API request for video generation or rendering is in progress
+                GlobalVideoProgressOverlay(
+                    state = globalLoadingState,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val isWideScreen = maxWidth >= 840.dp
+
+        if (isWideScreen) {
+            // Adaptive PC / Web / Tablet: Permanent side drawer + Scaffold
+            Row(modifier = Modifier.fillMaxSize()) {
+                SidebarDrawerContent(
+                    currentRoute = currentRoute,
+                    currentLanguage = currentLang,
+                    creatorName = settings.channelName,
+                    creatorEmail = settings.youTubeEmail,
+                    isPermanent = true,
+                    onOpenUserLogin = { showUserLoginDialog = true },
+                    onSelectRoute = { route -> viewModel.navigateTo(route) }
+                )
+
+                Scaffold(
+                    topBar = topBarContent,
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                ) { innerPadding ->
+                    screensContent(innerPadding)
+                }
+            }
+        } else {
+            // Mobile / Phone: ModalNavigationDrawer
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    SidebarDrawerContent(
+                        currentRoute = currentRoute,
+                        currentLanguage = currentLang,
+                        creatorName = settings.channelName,
+                        creatorEmail = settings.youTubeEmail,
+                        onOpenUserLogin = {
+                            showUserLoginDialog = true
+                            scope.launch { drawerState.close() }
+                        },
+                        onSelectRoute = { route ->
+                            viewModel.navigateTo(route)
+                            scope.launch { drawerState.close() }
+                        }
+                    )
+                }
+            ) {
+                Scaffold(
+                    topBar = topBarContent,
+                    modifier = Modifier.fillMaxSize()
+                ) { innerPadding ->
+                    screensContent(innerPadding)
                 }
             }
         }

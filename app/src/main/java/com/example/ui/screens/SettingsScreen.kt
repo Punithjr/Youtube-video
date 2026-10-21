@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import com.example.data.CreatorSettingsEntity
 import com.example.i18n.I18n
 import com.example.ui.theme.*
@@ -35,6 +36,12 @@ fun SettingsScreen(
     var ytStudioUrl by remember(settings) { mutableStateOf(settings.youtubeStudioUrl) }
     var igUrl by remember(settings) { mutableStateOf(settings.instagramUrl) }
     var fbUrl by remember(settings) { mutableStateOf(settings.facebookUrl) }
+    var googleAccountName by remember(settings) { mutableStateOf(settings.googleAccountName) }
+    var youTubeEmail by remember(settings) { mutableStateOf(settings.youTubeEmail) }
+    var youTubeHandle by remember(settings) { mutableStateOf(settings.youTubeHandle) }
+    var gitHubUsername by remember(settings) { mutableStateOf(settings.gitHubUsername) }
+    var gitHubRepo by remember(settings) { mutableStateOf(settings.gitHubRepo) }
+    var gitHubToken by remember(settings) { mutableStateOf(settings.gitHubToken) }
     var selectedLang by remember(settings) { mutableStateOf(settings.defaultLanguage) }
     var selectedTheme by remember(settings) { mutableStateOf(settings.theme) }
 
@@ -45,11 +52,17 @@ fun SettingsScreen(
             youtubeStudioUrl = ytStudioUrl,
             instagramUrl = igUrl,
             facebookUrl = fbUrl,
+            googleAccountName = googleAccountName,
+            youTubeEmail = youTubeEmail,
+            youTubeHandle = youTubeHandle,
+            gitHubUsername = gitHubUsername,
+            gitHubRepo = gitHubRepo,
+            gitHubToken = gitHubToken,
             defaultLanguage = selectedLang,
             theme = selectedTheme
         )
         onSaveSettings(updated)
-        Toast.makeText(context, "Settings saved! Links updated in top bar.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Settings saved! Links updated.", Toast.LENGTH_SHORT).show()
     }
 
     LazyColumn(
@@ -141,6 +154,107 @@ fun SettingsScreen(
                         Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(I18n.t("save", currentLanguage).uppercase(), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Google Profile & YouTube Account Details Card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "GOOGLE & YOUTUBE PROFILE LINK DETAILS",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = YouTubeRed
+                    )
+
+                    OutlinedTextField(
+                        value = googleAccountName,
+                        onValueChange = { googleAccountName = it },
+                        label = { Text("Google Account Name") },
+                        leadingIcon = { Icon(Icons.Default.AccountCircle, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = youTubeEmail,
+                        onValueChange = { youTubeEmail = it },
+                        label = { Text("Google Account Email") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = youTubeHandle,
+                        onValueChange = { youTubeHandle = it },
+                        label = { Text("YouTube Channel Handle") },
+                        leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+        }
+
+        // GitHub Data Link Card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "GITHUB DATA LINK CONFIGURATION",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = gitHubUsername,
+                        onValueChange = { gitHubUsername = it },
+                        label = { Text("GitHub Username / Org") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = gitHubRepo,
+                        onValueChange = { gitHubRepo = it },
+                        label = { Text("Target Sync Repository") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = gitHubToken,
+                        onValueChange = { gitHubToken = it },
+                        label = { Text("Personal Access Token (for remote commit)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Button(
+                        onClick = { handleSave() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24292E)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("SAVE GITHUB CONFIG", fontWeight = FontWeight.Bold)
                     }
                 }
             }

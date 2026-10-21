@@ -46,4 +46,24 @@ class ExampleUnitTest {
         assertTrue(plan.scenes.last().onScreenText.contains("09:00"))
         assertTrue(plan.youtubeDescription.contains("TIMESTAMPS"))
     }
+
+    @Test
+    fun testGitHubAndVideoEditorTranslations() {
+        assertEquals("Video Editor & AI", I18n.t("nav_video_editor", I18n.LANG_EN))
+        assertEquals("GitHub Data Link", I18n.t("nav_github_link", I18n.LANG_EN))
+        assertEquals("ವೀಡಿಯೊ ಸಂಪಾದಕ & AI", I18n.t("nav_video_editor", I18n.LANG_KN))
+        assertEquals("ಗಿಟ್‌ಹಬ್ ಡೇಟಾ ಲಿಂಕ್", I18n.t("nav_github_link", I18n.LANG_KN))
+    }
+
+    @Test
+    fun testCreatorSettingsDefaultGitHubAndGoogleFields() {
+        val settings = com.example.data.CreatorSettingsEntity()
+        assertEquals("punithjr2@gmail.com", settings.youTubeEmail)
+        assertEquals("Punith JR", settings.googleAccountName)
+        assertEquals("109283746501928374", settings.googleAccountId)
+        assertTrue(settings.isGitHubConnected)
+        assertEquals("punithjr2", settings.gitHubUsername)
+        assertEquals("creator-studio-content", settings.gitHubRepo)
+        assertEquals("main", settings.gitHubBranch)
+    }
 }

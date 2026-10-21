@@ -27,14 +27,19 @@ import com.example.data.ContentProjectEntity
 import com.example.generator.ContentGenerator
 import com.example.i18n.I18n
 import com.example.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun ShortsReelsScreen(
     currentLanguage: String,
     onSaveProject: (ContentProjectEntity) -> Unit,
+    onShowGlobalProgress: (title: String, subtitle: String, actionType: String, progress: Float?, onCancel: (() -> Unit)?) -> Unit = { _, _, _, _, _ -> },
+    onHideGlobalProgress: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val isKn = currentLanguage == I18n.LANG_KN
 
@@ -53,12 +58,24 @@ fun ShortsReelsScreen(
     }
 
     fun handleGenerate() {
-        plan = ContentGenerator.generateShortReel(
-            topic = topic,
-            platform = selectedPlatform,
-            language = currentLanguage
-        )
-        Toast.makeText(context, "Short/Reel blueprint generated!", Toast.LENGTH_SHORT).show()
+        scope.launch {
+            onShowGlobalProgress(
+                "Shorts & Reels API Generation",
+                "Analyzing trending audio & generating 9:16 vertical script...",
+                "generate",
+                0.4f
+            ) {
+                onHideGlobalProgress()
+            }
+            kotlinx.coroutines.delay(700)
+            plan = ContentGenerator.generateShortReel(
+                topic = topic,
+                platform = selectedPlatform,
+                language = currentLanguage
+            )
+            onHideGlobalProgress()
+            Toast.makeText(context, "Short/Reel blueprint generated!", Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun handleSave() {

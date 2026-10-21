@@ -17,9 +17,12 @@ import kotlinx.coroutines.launch
         MediaItemEntity::class,
         SavedScriptEntity::class,
         AutoVideoJobEntity::class,
-        PromptTemplateEntity::class
+        PromptTemplateEntity::class,
+        VideoMetadataEntity::class,
+        MangaStoryEntity::class,
+        MangaChapterEntity::class
     ],
-    version = 3,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,6 +33,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun savedScriptDao(): SavedScriptDao
     abstract fun autoVideoJobDao(): AutoVideoJobDao
     abstract fun promptTemplateDao(): PromptTemplateDao
+    abstract fun videoMetadataDao(): VideoMetadataDao
+    abstract fun mangaStoryDao(): MangaStoryDao
+    abstract fun mangaChapterDao(): MangaChapterDao
 
     companion object {
         @Volatile
@@ -311,6 +317,189 @@ abstract class AppDatabase : RoomDatabase() {
                     durationSec = 45,
                     uploadId = "IG-REEL-4402",
                     uploadUrl = "https://www.instagram.com/reel/IG-REEL-4402"
+                )
+            )
+
+            // Starter Video Metadata & Drafts
+            val videoDao = db.videoMetadataDao()
+            videoDao.insertVideo(
+                VideoMetadataEntity(
+                    title = "AI Video Production Masterclass",
+                    description = "Comprehensive guide on building automated creator workflows with neural generation tools and timeline sequencing.",
+                    topic = "AI Video Creation",
+                    format = "16:9 Long-Form",
+                    resolution = "1080p",
+                    fps = 60,
+                    durationSec = 615,
+                    fileUri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                    thumbnailUri = "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=800&q=80",
+                    fileSizeBytes = 145_000_000L,
+                    tags = "AI, VideoEditing, CreatorStudio, Masterclass, 2026",
+                    platform = "YouTube",
+                    draftStatus = "Draft",
+                    isDraft = true,
+                    completionProgress = 0.75f,
+                    audioTrackTitle = "Cyber Lo-Fi Dreamscape 120 BPM",
+                    voiceoverTone = "Storyteller & Confident",
+                    aspectRatio = "16:9",
+                    notes = "Scene 1 & 2 fully animated. Need to fine-tune final CTA overlay."
+                )
+            )
+            videoDao.insertVideo(
+                VideoMetadataEntity(
+                    title = "3 Retention Secrets for Vertical Reels",
+                    description = "Fast-paced breakdown of opening hooks that boost 3-second hold rate above 70%.",
+                    topic = "Instagram Algorithm",
+                    format = "9:16 Shorts",
+                    resolution = "1080p",
+                    fps = 60,
+                    durationSec = 35,
+                    fileUri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                    thumbnailUri = "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&q=80",
+                    fileSizeBytes = 28_000_000L,
+                    tags = "ReelsTips, ViralHooks, InstagramGrowth",
+                    platform = "Instagram",
+                    draftStatus = "Editing",
+                    isDraft = true,
+                    completionProgress = 0.45f,
+                    audioTrackTitle = "Viral Phonk Bass Boost",
+                    voiceoverTone = "High Energy & Direct",
+                    aspectRatio = "9:16",
+                    notes = "Rough cut timeline ready. Adding kinetic caption text."
+                )
+            )
+            videoDao.insertVideo(
+                VideoMetadataEntity(
+                    title = "The 2026 Creator Economy Survival Kit",
+                    description = "Complete tech stack recommendations for solo creators scaling multi-channel presence.",
+                    topic = "Creator Tech Stack",
+                    format = "16:9 Long-Form",
+                    resolution = "4K",
+                    fps = 60,
+                    durationSec = 820,
+                    fileUri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                    thumbnailUri = "https://images.unsplash.com/photo-1598550476439-6847785fcea6?w=800&q=80",
+                    fileSizeBytes = 412_000_000L,
+                    tags = "Gear, Cameras, Microphones, Productivity",
+                    platform = "YouTube",
+                    draftStatus = "Ready",
+                    isDraft = false,
+                    completionProgress = 1.0f,
+                    audioTrackTitle = "Acoustic Warm Studio Flow",
+                    voiceoverTone = "Relaxed & Authoritative",
+                    aspectRatio = "16:9",
+                    notes = "Color grading and loudness normalized. Ready for upload."
+                )
+            )
+
+            // Starter Manga Stories & Chapters
+            val storyDao = db.mangaStoryDao()
+            val chapterDao = db.mangaChapterDao()
+
+            val story1Id = storyDao.insertStory(
+                MangaStoryEntity(
+                    title = "Neo-Tokyo: Chrono Blade",
+                    japaneseTitle = "ネオ東京：クロノブレード",
+                    genre = "Cyberpunk / Action",
+                    artStyle = "Modern Shonen",
+                    synopsis = "In the cybernetic ruins of 2099 Neo-Tokyo, an orphaned cyber-samurai named Ren awakens with a forbidden Chrono Core capable of reversing time by 7 seconds. Hunted by the Zaibatsu Syndicate, he fights to uncover the truth behind the Great Blackout.",
+                    coverImageUrl = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&q=80",
+                    authorName = "Ren Kusanagi",
+                    status = "Ongoing",
+                    totalChapters = 2,
+                    tags = "Cyberpunk, Shonen, TimeManipulation, Samurai, Anime"
+                )
+            )
+
+            chapterDao.insertChapter(
+                MangaChapterEntity(
+                    storyId = story1Id,
+                    chapterNumber = 1,
+                    title = "The Shattered Clocktower",
+                    summary = "Ren cornered on the Shinjuku skybridge activates his Chrono Blade for the first time as mechanical hounds encircle him.",
+                    contentScript = """
+[PANEL 1 - WIDE SHOT]: Rain-slicked holographic billboards towering above Sector 4. Thunder crackles in violet arcs.
+REN: (Internal Monologue) "Rain never washes away the rust... or the blood."
+
+[PANEL 2 - CLOSE UP]: Three cybernetic hunter-drones descend, red targeting lasers locking onto Ren's collar.
+SFX: *BZZZZZZ-SHK*
+DRONE-ALPHA: "Subject 09-Omega located. Lethal force authorized."
+
+[PANEL 3 - ACTION SLASH]: Ren reaches for his hilt. The Chrono Core pulses cyan. Time distorts into slow-motion shards!
+REN: "Seven seconds... that is all the time I need to dismantle you."
+SFX: *CHRONO-BURST!* *CLANGGGG!*
+                    """.trimIndent(),
+                    audioUrl = "https://actions.google.com/sounds/v1/science_fiction/scifi_laser_burst.ogg",
+                    videoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                    audioDurationSec = 145,
+                    videoDurationSec = 75,
+                    hasAudio = true,
+                    hasVideo = true,
+                    status = "Video Rendered",
+                    reportText = """
+# Manga Chapter 1 Production Report
+- Story Arc: The Awakening Arc (Act I)
+- Scene Count: 8 Key Manga Panels
+- Pacing Score: 94/100 (Optimal Shonen Cliffhanger)
+- Sound Design: Synthwave Cyber Beat with Katana Reverb
+- Key Takeaway: Opening 3 panels hook reader interest with visual spectacle and stakes.
+                    """.trimIndent()
+                )
+            )
+
+            chapterDao.insertChapter(
+                MangaChapterEntity(
+                    storyId = story1Id,
+                    chapterNumber = 2,
+                    title = "Echoes in the Neon Slums",
+                    summary = "Ren seeks refuge in the subterranean hackers den of Alley 9, meeting the enigmatic net-weaver Maya.",
+                    contentScript = """
+[PANEL 1]: Low-lit underground workshop cluttered with severed android limbs and flickering neon cables.
+MAYA: "Look what the cyber-rats dragged in. You're bleeding Chrono-fluid on my antique carpet, samurai."
+REN: "Zaibatsu sent their death squad. I need an EMP suppressor."
+MAYA: "Nothing in Sector 4 is free. What are you offering?"
+                    """.trimIndent(),
+                    hasAudio = false,
+                    hasVideo = false,
+                    status = "Draft"
+                )
+            )
+
+            val story2Id = storyDao.insertStory(
+                MangaStoryEntity(
+                    title = "Shadow Alchemist: Soul Rebirth",
+                    japaneseTitle = "影の錬金術師",
+                    genre = "Dark Fantasy",
+                    artStyle = "Seinen Noir",
+                    synopsis = "Betrayed by the Imperial Council and left for dead in the Abyss, Master Alchemist Eric transmutes his own shadow into an autonomous familiar to reclaim the stolen Philosophic Core.",
+                    coverImageUrl = "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80",
+                    authorName = "Kaelen Drake",
+                    status = "Ongoing",
+                    totalChapters = 1,
+                    tags = "Alchemy, DarkFantasy, Seinen, Vengeance, Magic"
+                )
+            )
+
+            chapterDao.insertChapter(
+                MangaChapterEntity(
+                    storyId = story2Id,
+                    chapterNumber = 1,
+                    title = "Forbidden Circle of Ash",
+                    summary = "Eric draws an alchemical sigil using his own blood under the Blood Moon, awakening the Shadow Homunculus.",
+                    contentScript = """
+[PANEL 1 - FULL BLEED]: Blood-red full moon over the blackened spire of the Abyss.
+ERIC: "Blood pays the debt. Ash seals the covenant."
+SFX: *FWOOOOSH!*
+[PANEL 2]: The ground ripples like liquid ink. Two glowing crimson eyes open within Eric's own shadow!
+SHADOW FAMILIAR: "At your command, Master... who shall we devour first?"
+                    """.trimIndent(),
+                    audioUrl = "https://actions.google.com/sounds/v1/science_fiction/deep_space_hum.ogg",
+                    videoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                    audioDurationSec = 110,
+                    videoDurationSec = 60,
+                    hasAudio = true,
+                    hasVideo = true,
+                    status = "Ready"
                 )
             )
         }

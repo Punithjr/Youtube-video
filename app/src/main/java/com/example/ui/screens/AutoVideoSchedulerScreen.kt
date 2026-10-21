@@ -36,6 +36,8 @@ import com.example.i18n.I18n
 import com.example.ui.components.AccountLoginDialog
 import com.example.ui.components.PlatformBadge
 import com.example.ui.components.UserLoginDialog
+import com.example.ui.components.VideoGenerationProgressIndicator
+import com.example.ui.components.VideoPlayerView
 import com.example.ui.theme.*
 
 @Composable
@@ -139,6 +141,16 @@ fun AutoVideoSchedulerScreen(
 
         // TAB 1: 10-MIN AUTO VIDEO ENGINE & SCHEDULER
         if (selectedTabIndex == 0) {
+            // Circular progress indicator during 10-minute generation
+            item {
+                VideoGenerationProgressIndicator(
+                    isVisible = isGeneratingNow,
+                    statusText = "10-Minute Video Engine Running...",
+                    stepText = "Generating script & 3 visual scenes, then uploading",
+                    actionType = "render"
+                )
+            }
+
             // Live Scheduler Banner & Countdown Card
             item {
                 Card(

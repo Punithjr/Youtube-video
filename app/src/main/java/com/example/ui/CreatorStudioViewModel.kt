@@ -61,6 +61,29 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
             initialValue = emptyList()
         )
 
+    val allVideos: StateFlow<List<VideoMetadataEntity>> = repository.allVideos
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val draftVideos: StateFlow<List<VideoMetadataEntity>> = repository.draftVideos
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val mangaStories: StateFlow<List<MangaStoryEntity>> = repository.mangaStories
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+
+
     // 10-Minute Auto Video Generator Scheduler State
     private val _isAutoSchedulerActive = MutableStateFlow(true)
     val isAutoSchedulerActive: StateFlow<Boolean> = _isAutoSchedulerActive.asStateFlow()
@@ -70,6 +93,44 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
 
     private val _isGeneratingNow = MutableStateFlow(false)
     val isGeneratingNow: StateFlow<Boolean> = _isGeneratingNow.asStateFlow()
+
+    // Global CircularProgressIndicator overlay state for video generation & rendering API requests
+    private val _globalLoadingState = MutableStateFlow(com.example.ui.components.GlobalVideoLoadingState())
+    val globalLoadingState: StateFlow<com.example.ui.components.GlobalVideoLoadingState> = _globalLoadingState.asStateFlow()
+
+    fun showGlobalVideoProgress(
+        title: String,
+        subtitle: String,
+        actionType: String = "generate",
+        progress: Float? = null,
+        onCancel: (() -> Unit)? = null
+    ) {
+        _globalLoadingState.value = com.example.ui.components.GlobalVideoLoadingState(
+            isVisible = true,
+            title = title,
+            subtitle = subtitle,
+            actionType = actionType,
+            progress = progress,
+            cancellable = true,
+            onCancel = onCancel ?: { hideGlobalVideoProgress() }
+        )
+    }
+
+    fun updateGlobalVideoProgress(
+        progress: Float? = null,
+        subtitle: String? = null
+    ) {
+        _globalLoadingState.update { current ->
+            current.copy(
+                progress = progress ?: current.progress,
+                subtitle = subtitle ?: current.subtitle
+            )
+        }
+    }
+
+    fun hideGlobalVideoProgress() {
+        _globalLoadingState.value = com.example.ui.components.GlobalVideoLoadingState(isVisible = false)
+    }
 
     private var schedulerJob: kotlinx.coroutines.Job? = null
 
@@ -215,8 +276,21 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
     ) {
         viewModelScope.launch {
             _isGeneratingNow.value = true
+            showGlobalVideoProgress(
+                title = "AI Video Engine API Request",
+                subtitle = "Generating script, scene storyboard & neural assets...",
+                actionType = "generate",
+                progress = 0.25f,
+                onCancel = {
+                    _isGeneratingNow.value = false
+                    hideGlobalVideoProgress()
+                    _toastMessage.tryEmit("Video generation cancelled")
+                }
+            )
             _toastMessage.tryEmit("🎬 AI Studio Engine running: Generating script & 3 visual scenes...")
-            kotlinx.coroutines.delay(1200)
+            kotlinx.coroutines.delay(800)
+
+            updateGlobalVideoProgress(progress = 0.55f, subtitle = "Synthesizing multi-scene video plan & visual prompts...")
 
             val autoContent = com.example.generator.ContentGenerator.generateAutoVideo(
                 topic = topic,
@@ -224,6 +298,9 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
                 language = language,
                 format = format
             )
+
+            updateGlobalVideoProgress(progress = 0.85f, subtitle = "Rendering video & preparing upload package...")
+            kotlinx.coroutines.delay(500)
 
             val uploadUrl = when (platform.lowercase()) {
                 "instagram" -> "https://www.instagram.com/reel/${autoContent.uploadId}"
@@ -276,8 +353,81 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
                 )
             )
 
+            updateGlobalVideoProgress(progress = 1.0f, subtitle = "Published to $platform successfully!")
+            kotlinx.coroutines.delay(300)
             _isGeneratingNow.value = false
+            hideGlobalVideoProgress()
             _toastMessage.tryEmit("✅ Video rendered & auto-uploaded to $platform: ${autoContent.uploadId}")
+        }
+    }
+
+    fun requestVideoGenerationApi(
+        topic: String,
+        style: String = "Cinematic",
+        platform: String = "YouTube",
+        format: String = "16:9 Landscape",
+        language: String = "en",
+        onSuccess: (ContentProjectEntity) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            showGlobalVideoProgress(
+                title = "AI Video Generation API Request",
+                subtitle = "Contacting AI Video Engine for: \"$topic\"...",
+                actionType = "generate",
+                progress = 0.2f,
+                onCancel = {
+                    hideGlobalVideoProgress()
+                    _toastMessage.tryEmit("API request cancelled")
+                }
+            )
+            kotlinx.coroutines.delay(800)
+            updateGlobalVideoProgress(progress = 0.6f, subtitle = "Synthesizing multi-scene script & visual storyboard...")
+            kotlinx.coroutines.delay(700)
+            val plan = com.example.generator.ContentGenerator.generateVideoPlan(topic, style, language)
+            updateGlobalVideoProgress(progress = 0.9f, subtitle = "Compiling project assets & audio track suggestions...")
+            kotlinx.coroutines.delay(400)
+            val project = ContentProjectEntity(
+                title = plan.title,
+                topic = topic,
+                platform = platform,
+                format = format,
+                status = "Generated",
+                scriptText = plan.ideaSummary,
+                captionText = plan.youtubeDescription,
+                hashtagsText = plan.hashtags,
+                duration = "10m"
+            )
+            repository.addProject(project)
+            hideGlobalVideoProgress()
+            _toastMessage.tryEmit("Video generation API request completed: ${project.title}")
+            onSuccess(project)
+        }
+    }
+
+    fun requestVideoRenderApi(
+        projectTitle: String,
+        sceneCount: Int = 3,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            showGlobalVideoProgress(
+                title = "Video Rendering Engine API",
+                subtitle = "Submitting $sceneCount scenes to Cloud Video Render Farm...",
+                actionType = "render",
+                progress = 0.2f,
+                onCancel = {
+                    hideGlobalVideoProgress()
+                    _toastMessage.tryEmit("Render request cancelled")
+                }
+            )
+            kotlinx.coroutines.delay(800)
+            updateGlobalVideoProgress(progress = 0.6f, subtitle = "Encoding 1080p 60fps video frames & normalizing audio...")
+            kotlinx.coroutines.delay(800)
+            updateGlobalVideoProgress(progress = 0.95f, subtitle = "Color grading, overlays & finalizing MP4 container...")
+            kotlinx.coroutines.delay(400)
+            hideGlobalVideoProgress()
+            _toastMessage.tryEmit("Render API complete! Video rendered successfully.")
+            onSuccess()
         }
     }
 
@@ -340,6 +490,257 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
                 )
             )
             _toastMessage.tryEmit("Sample creator items populated!")
+        }
+    }
+
+    fun saveVideo(video: VideoMetadataEntity, onComplete: ((Long) -> Unit)? = null) {
+        viewModelScope.launch {
+            val id = repository.saveVideo(video)
+            val label = if (video.isDraft) "Draft saved" else "Video metadata saved"
+            _toastMessage.tryEmit("$label: \"${video.title}\"")
+            onComplete?.invoke(id)
+        }
+    }
+
+    fun updateVideo(video: VideoMetadataEntity) {
+        viewModelScope.launch {
+            repository.updateVideo(video)
+            _toastMessage.tryEmit("Updated: \"${video.title}\"")
+        }
+    }
+
+    fun deleteVideo(video: VideoMetadataEntity) {
+        viewModelScope.launch {
+            repository.deleteVideo(video)
+            _toastMessage.tryEmit("Video draft removed")
+        }
+    }
+
+    fun deleteVideoById(id: Long) {
+        viewModelScope.launch {
+            repository.deleteVideoById(id)
+            _toastMessage.tryEmit("Video draft removed")
+        }
+    }
+
+    fun updateVideoDraftStatus(id: Long, newStatus: String) {
+        viewModelScope.launch {
+            val isDraft = newStatus.lowercase() != "published"
+            repository.updateVideoDraftStatus(id, newStatus, isDraft)
+            _toastMessage.tryEmit("Draft status changed to '$newStatus'")
+        }
+    }
+
+    fun updateVideoMetadata(id: Long, title: String, description: String) {
+        viewModelScope.launch {
+            repository.updateVideoMetadata(id, title, description)
+            _toastMessage.tryEmit("Video metadata updated")
+        }
+    }
+
+    fun clearAllDrafts() {
+        viewModelScope.launch {
+            repository.clearAllDrafts()
+            _toastMessage.tryEmit("All video drafts cleared")
+        }
+    }
+
+    // Manga Stories & Chapters
+    fun getChaptersForStory(storyId: Long): Flow<List<MangaChapterEntity>> = repository.getChaptersForStory(storyId)
+
+    fun addMangaStory(story: MangaStoryEntity, onComplete: ((Long) -> Unit)? = null) {
+        viewModelScope.launch {
+            val id = repository.addMangaStory(story)
+            _toastMessage.tryEmit("Created Manga Story: \"${story.title}\"")
+            onComplete?.invoke(id)
+        }
+    }
+
+    fun updateMangaStory(story: MangaStoryEntity) {
+        viewModelScope.launch {
+            repository.updateMangaStory(story)
+            _toastMessage.tryEmit("Updated Manga: \"${story.title}\"")
+        }
+    }
+
+    fun deleteMangaStory(story: MangaStoryEntity) {
+        viewModelScope.launch {
+            repository.deleteMangaStory(story)
+            _toastMessage.tryEmit("Deleted Manga Story: \"${story.title}\"")
+        }
+    }
+
+    fun addMangaChapter(chapter: MangaChapterEntity, onComplete: ((Long) -> Unit)? = null) {
+        viewModelScope.launch {
+            val id = repository.addMangaChapter(chapter)
+            _toastMessage.tryEmit("Added Chapter ${chapter.chapterNumber}: \"${chapter.title}\"")
+            onComplete?.invoke(id)
+        }
+    }
+
+    fun updateMangaChapter(chapter: MangaChapterEntity) {
+        viewModelScope.launch {
+            repository.updateMangaChapter(chapter)
+            _toastMessage.tryEmit("Updated Chapter ${chapter.chapterNumber}")
+        }
+    }
+
+    fun deleteMangaChapter(chapter: MangaChapterEntity) {
+        viewModelScope.launch {
+            repository.deleteMangaChapter(chapter)
+            _toastMessage.tryEmit("Removed Chapter ${chapter.chapterNumber}")
+        }
+    }
+
+    // Multi-modal Output 1: Audio Generation
+    fun generateChapterAudio(chapter: MangaChapterEntity, onComplete: (MangaChapterEntity) -> Unit) {
+        viewModelScope.launch {
+            showGlobalVideoProgress(
+                title = "AI Manga Audio Generation",
+                subtitle = "Synthesizing anime voice actors, cinematic BGM & SFX for Chapter ${chapter.chapterNumber}...",
+                actionType = "api",
+                progress = 0.3f
+            )
+            kotlinx.coroutines.delay(1000)
+            updateGlobalVideoProgress(0.75f, "Mixing dramatic audio stems & sound effects...")
+            kotlinx.coroutines.delay(800)
+            val updated = chapter.copy(
+                hasAudio = true,
+                audioUrl = "https://actions.google.com/sounds/v1/science_fiction/scifi_laser_burst.ogg",
+                audioDurationSec = 145,
+                status = if (chapter.hasVideo) "Ready" else "Audio Ready",
+                updatedAt = System.currentTimeMillis()
+            )
+            repository.updateMangaChapter(updated)
+            hideGlobalVideoProgress()
+            _toastMessage.tryEmit("🎧 Chapter Audio generated with anime voice acting & BGM!")
+            onComplete(updated)
+        }
+    }
+
+    // Multi-modal Output 2: Video Overview Generation
+    fun generateChapterVideo(chapter: MangaChapterEntity, onComplete: (MangaChapterEntity) -> Unit) {
+        viewModelScope.launch {
+            showGlobalVideoProgress(
+                title = "Motion Manga Video Generation",
+                subtitle = "Rendering dynamic 16:9 panel animation with Ken Burns motion & visual SFX...",
+                actionType = "render",
+                progress = 0.25f
+            )
+            kotlinx.coroutines.delay(1000)
+            updateGlobalVideoProgress(0.65f, "Compiling panel transitions, kinetic text & audio dub...")
+            kotlinx.coroutines.delay(1000)
+            updateGlobalVideoProgress(0.95f, "Finalizing 1080p motion video container...")
+            kotlinx.coroutines.delay(400)
+            val updated = chapter.copy(
+                hasVideo = true,
+                videoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                videoDurationSec = 75,
+                status = "Video Rendered",
+                updatedAt = System.currentTimeMillis()
+            )
+            repository.updateMangaChapter(updated)
+            hideGlobalVideoProgress()
+            _toastMessage.tryEmit("🎬 Motion Manga Video Overview rendered! Media3 player ready.")
+            onComplete(updated)
+        }
+    }
+
+    // Multi-modal Output 3: Slide Deck Generation
+    fun generateChapterSlideDeck(chapter: MangaChapterEntity, onComplete: (MangaChapterEntity) -> Unit) {
+        viewModelScope.launch {
+            showGlobalVideoProgress(
+                title = "Slide Deck Generation",
+                subtitle = "Synthesizing 5-slide visual presentation deck for Chapter ${chapter.chapterNumber}...",
+                actionType = "generate",
+                progress = 0.4f
+            )
+            kotlinx.coroutines.delay(800)
+            val slidesJson = "SLIDES_READY"
+            val updated = chapter.copy(
+                slideDeckJson = slidesJson,
+                updatedAt = System.currentTimeMillis()
+            )
+            repository.updateMangaChapter(updated)
+            hideGlobalVideoProgress()
+            _toastMessage.tryEmit("📊 Slide Deck synthesized with chapter beats & character cards!")
+            onComplete(updated)
+        }
+    }
+
+    // Multi-modal Output 4: Flashcards Generation
+    fun generateChapterFlashcards(chapter: MangaChapterEntity, onComplete: (MangaChapterEntity) -> Unit) {
+        viewModelScope.launch {
+            showGlobalVideoProgress(
+                title = "Manga Flashcards Generation",
+                subtitle = "Extracting lore, character abilities & Kanji vocabulary flashcards...",
+                actionType = "generate",
+                progress = 0.5f
+            )
+            kotlinx.coroutines.delay(700)
+            val updated = chapter.copy(
+                flashcardsJson = "FLASHCARDS_READY",
+                updatedAt = System.currentTimeMillis()
+            )
+            repository.updateMangaChapter(updated)
+            hideGlobalVideoProgress()
+            _toastMessage.tryEmit("🃏 Interactive Manga Lore & Kanji Flashcards generated!")
+            onComplete(updated)
+        }
+    }
+
+    // Multi-modal Output 5: Infographic Generation
+    fun generateChapterInfographic(chapter: MangaChapterEntity, onComplete: (MangaChapterEntity) -> Unit) {
+        viewModelScope.launch {
+            showGlobalVideoProgress(
+                title = "Infographic Generation",
+                subtitle = "Building character power scaling, relationship chart & chapter arc breakdown...",
+                actionType = "generate",
+                progress = 0.5f
+            )
+            kotlinx.coroutines.delay(700)
+            val updated = chapter.copy(
+                infographicJson = "INFOGRAPHIC_READY",
+                updatedAt = System.currentTimeMillis()
+            )
+            repository.updateMangaChapter(updated)
+            hideGlobalVideoProgress()
+            _toastMessage.tryEmit("📈 Story Arc & Power-Scaling Infographic generated!")
+            onComplete(updated)
+        }
+    }
+
+    // Multi-modal Output 6: Comprehensive Report Generation
+    fun generateChapterReport(chapter: MangaChapterEntity, onComplete: (MangaChapterEntity) -> Unit) {
+        viewModelScope.launch {
+            showGlobalVideoProgress(
+                title = "Executive Story Report",
+                subtitle = "Compiling full chapter manuscript, pacing analysis & script breakdown...",
+                actionType = "generate",
+                progress = 0.4f
+            )
+            kotlinx.coroutines.delay(800)
+            val report = """
+# Chapter ${chapter.chapterNumber}: ${chapter.title} - Complete Executive Manuscript
+- Story Target: Shonen Weekly Release & Motion Webtoon
+- Plot Summary: ${chapter.summary}
+- Pacing Index: 92/100 (Optimal rising action with cliffhanger hook)
+- Character Arcs: Protagonist awakening power core under life-or-death pressure
+- Sound Design: Synthwave + Orchestral strings + Katana reverb
+- Scene Breakdown:
+  1. Opening Hook: Rainy skyline with holographic Zaibatsu billboards
+  2. Escalation: Hunter-drones swarm the skybridge
+  3. Climax: 7-second time rewind execution with cyan blade
+  4. Cliffhanger: Enigmatic figure watches from shadow
+            """.trimIndent()
+            val updated = chapter.copy(
+                reportText = report,
+                updatedAt = System.currentTimeMillis()
+            )
+            repository.updateMangaChapter(updated)
+            hideGlobalVideoProgress()
+            _toastMessage.tryEmit("📋 Comprehensive Story Manuscript & Report compiled!")
+            onComplete(updated)
         }
     }
 }

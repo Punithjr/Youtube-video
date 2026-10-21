@@ -20,12 +20,24 @@ data class CreatorSettingsEntity(
     val monthlyViews: Long = 184500,
     val engagementRate: Float = 6.4f,
     val isYouTubeConnected: Boolean = true,
-    val youTubeEmail: String = "creator@gmail.com",
+    val youTubeEmail: String = "punithjr2@gmail.com",
     val youTubeHandle: String = "@ProCreator",
+    val googleAccountName: String = "Punith JR",
+    val googleAccountId: String = "109283746501928374",
     val isInstagramConnected: Boolean = true,
     val instagramHandle: String = "@creator_official",
     val isFacebookConnected: Boolean = true,
-    val facebookPageName: String = "Pro Creator Community"
+    val facebookPageName: String = "Pro Creator Community",
+    // GitHub Data Link fields
+    val isGitHubConnected: Boolean = true,
+    val gitHubUsername: String = "punithjr2",
+    val gitHubRepo: String = "creator-studio-content",
+    val gitHubBranch: String = "main",
+    val gitHubToken: String = "",
+    val gitHubLastSync: String = "2026-10-19 06:05",
+    val gitHubAvatarUrl: String = "https://avatars.githubusercontent.com/u/punithjr2",
+    val gitHubBio: String = "Creator & developer automating social media workflows with AI",
+    val gitHubPublicRepos: Int = 14
 )
 
 @Entity(tableName = "calendar_tasks")
@@ -123,3 +135,78 @@ data class PromptTemplateEntity(
     val isFavorite: Boolean = false,
     val usageCount: Int = 0
 )
+
+@Entity(tableName = "video_metadata")
+data class VideoMetadataEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val description: String = "",
+    val topic: String = "",
+    val format: String = "16:9 Long-Form", // "16:9 Long-Form", "9:16 Shorts", "1:1 Square"
+    val resolution: String = "1080p", // "720p", "1080p", "4K"
+    val fps: Int = 60,
+    val durationSec: Int = 60,
+    val fileUri: String = "",
+    val thumbnailUri: String = "",
+    val fileSizeBytes: Long = 0L,
+    val tags: String = "",
+    val platform: String = "YouTube", // "YouTube", "Instagram", "Facebook", "TikTok", "All"
+    val draftStatus: String = "Draft", // "Draft", "Editing", "Rendering", "Ready", "Published", "Archived"
+    val isDraft: Boolean = true,
+    val completionProgress: Float = 0.25f, // 0.0 to 1.0 completion ratio
+    val scenesJson: String = "", // serialized timeline scenes
+    val audioTrackTitle: String = "Cinematic Ambient Beat",
+    val voiceoverTone: String = "Energetic & Fast-Paced",
+    val aspectRatio: String = "16:9",
+    val bitRateKbps: Int = 12000,
+    val videoCodec: String = "H.264 / AVC",
+    val notes: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "manga_stories")
+data class MangaStoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val japaneseTitle: String = "",
+    val genre: String = "Action / Shonen", // "Action / Shonen", "Cyberpunk", "Dark Fantasy", "Supernatural", "Sci-Fi", "Mystery"
+    val artStyle: String = "Modern Shonen", // "Modern Shonen", "Seinen Noir", "Webtoon Color", "Retro 90s Manga", "Chibi / Comedic"
+    val synopsis: String,
+    val coverImageUrl: String = "",
+    val authorName: String = "Creator Studio AI",
+    val status: String = "Ongoing", // "Draft", "Ongoing", "Completed"
+    val totalChapters: Int = 1,
+    val targetAudience: String = "Teens & Young Adults",
+    val tags: String = "Manga, Anime, Epic, Superpowers, Weekly Jump",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "manga_chapters")
+data class MangaChapterEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val storyId: Long,
+    val chapterNumber: Int,
+    val title: String,
+    val summary: String,
+    val contentScript: String = "", // dialogue, panels, sound effects
+    val panelsJson: String = "", // serialized panels
+    val audioUrl: String = "", // audio narration / voiceover track URL
+    val videoUrl: String = "", // motion manga video overview URL
+    val audioDurationSec: Int = 120,
+    val videoDurationSec: Int = 60,
+    val hasAudio: Boolean = false,
+    val hasVideo: Boolean = false,
+    val slideDeckJson: String = "", // 5-slide presentation deck
+    val flashcardsJson: String = "", // interactive study/lore flashcards
+    val infographicJson: String = "", // power scaling & timeline breakdown
+    val reportText: String = "", // comprehensive narrative report / manuscript
+    val status: String = "Draft", // "Draft", "Scripted", "Audio Ready", "Video Rendered", "Published"
+    val downloadUrl: String = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    val fileSizeBytes: Long = 48_500_000L,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+

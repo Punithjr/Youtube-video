@@ -121,3 +121,114 @@ interface PromptTemplateDao {
     @Query("UPDATE prompt_templates SET usageCount = usageCount + 1 WHERE id = :id")
     suspend fun incrementUsage(id: Long)
 }
+
+@Dao
+interface VideoMetadataDao {
+    @Query("SELECT * FROM video_metadata ORDER BY updatedAt DESC")
+    fun getAllVideos(): Flow<List<VideoMetadataEntity>>
+
+    @Query("SELECT * FROM video_metadata WHERE isDraft = 1 ORDER BY updatedAt DESC")
+    fun getDraftVideos(): Flow<List<VideoMetadataEntity>>
+
+    @Query("SELECT * FROM video_metadata WHERE draftStatus = :status ORDER BY updatedAt DESC")
+    fun getVideosByStatus(status: String): Flow<List<VideoMetadataEntity>>
+
+    @Query("SELECT * FROM video_metadata WHERE platform = :platform ORDER BY updatedAt DESC")
+    fun getVideosByPlatform(platform: String): Flow<List<VideoMetadataEntity>>
+
+    @Query("SELECT * FROM video_metadata WHERE id = :id LIMIT 1")
+    suspend fun getVideoById(id: Long): VideoMetadataEntity?
+
+    @Query("SELECT * FROM video_metadata WHERE id = :id LIMIT 1")
+    fun getVideoByIdFlow(id: Long): Flow<VideoMetadataEntity?>
+
+    @Query("SELECT COUNT(*) FROM video_metadata WHERE isDraft = 1")
+    fun getDraftCount(): Flow<Int>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertVideo(video: VideoMetadataEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(videos: List<VideoMetadataEntity>): List<Long>
+
+    @Update
+    suspend fun updateVideo(video: VideoMetadataEntity)
+
+    @Query("UPDATE video_metadata SET draftStatus = :newStatus, isDraft = :isDraft, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateDraftStatus(
+        id: Long,
+        newStatus: String,
+        isDraft: Boolean = (newStatus != "Published"),
+        updatedAt: Long = System.currentTimeMillis()
+    )
+
+    @Query("UPDATE video_metadata SET title = :title, description = :description, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateMetadata(
+        id: Long,
+        title: String,
+        description: String,
+        updatedAt: Long = System.currentTimeMillis()
+    )
+
+    @Delete
+    suspend fun deleteVideo(video: VideoMetadataEntity)
+
+    @Query("DELETE FROM video_metadata WHERE id = :id")
+    suspend fun deleteVideoById(id: Long)
+
+    @Query("DELETE FROM video_metadata WHERE draftStatus = 'Draft' AND isDraft = 1")
+    suspend fun clearAllDrafts()
+}
+
+@Dao
+interface MangaStoryDao {
+    @Query("SELECT * FROM manga_stories ORDER BY updatedAt DESC")
+    fun getAllStories(): Flow<List<MangaStoryEntity>>
+
+    @Query("SELECT * FROM manga_stories WHERE id = :id LIMIT 1")
+    fun getStoryById(id: Long): Flow<MangaStoryEntity?>
+
+    @Query("SELECT * FROM manga_stories WHERE id = :id LIMIT 1")
+    suspend fun getStoryByIdOnce(id: Long): MangaStoryEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStory(story: MangaStoryEntity): Long
+
+    @Update
+    suspend fun updateStory(story: MangaStoryEntity)
+
+    @Delete
+    suspend fun deleteStory(story: MangaStoryEntity)
+
+    @Query("DELETE FROM manga_stories WHERE id = :id")
+    suspend fun deleteStoryById(id: Long)
+}
+
+@Dao
+interface MangaChapterDao {
+    @Query("SELECT * FROM manga_chapters WHERE storyId = :storyId ORDER BY chapterNumber ASC")
+    fun getChaptersForStory(storyId: Long): Flow<List<MangaChapterEntity>>
+
+    @Query("SELECT * FROM manga_chapters WHERE id = :id LIMIT 1")
+    fun getChapterById(id: Long): Flow<MangaChapterEntity?>
+
+    @Query("SELECT * FROM manga_chapters WHERE id = :id LIMIT 1")
+    suspend fun getChapterByIdOnce(id: Long): MangaChapterEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChapter(chapter: MangaChapterEntity): Long
+
+    @Update
+    suspend fun updateChapter(chapter: MangaChapterEntity)
+
+    @Delete
+    suspend fun deleteChapter(chapter: MangaChapterEntity)
+
+    @Query("DELETE FROM manga_chapters WHERE id = :id")
+    suspend fun deleteChapterById(id: Long)
+
+    @Query("DELETE FROM manga_chapters WHERE storyId = :storyId")
+    suspend fun deleteChaptersForStory(storyId: Long)
+}
+
+

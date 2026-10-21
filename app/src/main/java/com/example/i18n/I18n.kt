@@ -41,6 +41,9 @@ object I18n {
             "nav_ai_tools" -> if (isKn) "AI ಪರಿಕರಗಳು" else "AI Tools"
             "nav_social_channels" -> if (isKn) "ಸಾಮಾಜಿಕ ಚಾನೆಲ್‌ಗಳು" else "Social Channels"
             "nav_backup_restore" -> if (isKn) "ಬ್ಯಾಕಪ್ / ಮರುಸ್ಥಾಪನೆ" else "Backup / Restore"
+            "nav_video_editor" -> if (isKn) "ವೀಡಿಯೊ ಸಂಪಾದಕ & AI" else "Video Editor & AI"
+            "nav_github_link" -> if (isKn) "ಗಿಟ್‌ಹಬ್ ಡೇಟಾ ಲಿಂಕ್" else "GitHub Data Link"
+            "nav_manga_studio" -> if (isKn) "ಮಂಗಾ ಸ್ಟೋರಿ ಸ್ಟುಡಿಯೋ" else "Manga Story Studio"
             "nav_settings" -> if (isKn) "ಸೆಟ್ಟಿಂಗ್ಸ್" else "Settings"
 
             // Quick Actions Bar

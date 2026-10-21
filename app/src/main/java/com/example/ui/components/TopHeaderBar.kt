@@ -37,6 +37,7 @@ fun TopHeaderBar(
     onOpenSettings: () -> Unit,
     onOpenUserLogin: () -> Unit = {},
     onOpenPlatformLogin: (String) -> Unit = {},
+    onOpenGitHubLink: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -152,6 +153,25 @@ fun TopHeaderBar(
                             imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = "Toggle Theme",
                             tint = if (isDarkTheme) StudioAmber else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // GitHub Data Link Top Button
+                    IconButton(
+                        onClick = onOpenGitHubLink,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF24292E))
+                            .testTag("top_github_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Code,
+                            contentDescription = "GitHub Data Link",
+                            tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -285,6 +305,31 @@ fun TopHeaderBar(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Facebook",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                // GitHub Data Link Button
+                Button(
+                    onClick = onOpenGitHubLink,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24292E)),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .height(38.dp)
+                        .testTag("header_github_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Code,
+                        contentDescription = "GitHub Data Link",
+                        tint = Color.White,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "GitHub Link",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Tag
@@ -28,6 +29,7 @@ fun QuickActionsBar(
     onOpenScriptGenerator: () -> Unit,
     onOpenCaptionGenerator: () -> Unit,
     onOpenHashtagGenerator: () -> Unit,
+    onOpenGitHubSync: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -106,6 +108,16 @@ fun QuickActionsBar(
                     gradient = listOf(Color(0xFF06B6D4), Color(0xFF0E7490)),
                     testTag = "quick_action_hashtags",
                     onClick = onOpenHashtagGenerator,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Quick Action 4: GitHub Sync
+                QuickActionButton(
+                    icon = Icons.Default.Code,
+                    label = if (currentLanguage == I18n.LANG_KN) "ಗಿಟ್‌ಹಬ್ ಸಿಂಕ್" else "GitHub Sync",
+                    gradient = listOf(Color(0xFF24292E), Color(0xFF1E293B)),
+                    testTag = "quick_action_github",
+                    onClick = onOpenGitHubSync,
                     modifier = Modifier.weight(1f)
                 )
             }

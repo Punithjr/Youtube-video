@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -45,6 +46,9 @@ val AllNavItems = listOf(
     NavItem("analytics", "nav_analytics", Icons.Default.BarChart),
     NavItem("ai_tools", "nav_ai_tools", Icons.Default.AutoAwesome),
     NavItem("social_channels", "nav_social_channels", Icons.Default.Share),
+    NavItem("video_editor", "nav_video_editor", Icons.Default.MovieFilter, "AI + PLAYER"),
+    NavItem("manga_studio", "nav_manga_studio", Icons.Default.AutoStories, "MANGA + AI"),
+    NavItem("github_link", "nav_github_link", Icons.Default.Code, "GIT SYNC"),
     NavItem("backup_restore", "nav_backup_restore", Icons.Default.Backup),
     NavItem("settings", "nav_settings", Icons.Default.Settings)
 )
@@ -57,17 +61,56 @@ fun SidebarDrawerContent(
     onOpenUserLogin: () -> Unit = {},
     creatorName: String = "Pro Creator",
     creatorEmail: String = "creator@gmail.com",
+    isPermanent: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    ModalDrawerSheet(
-        modifier = modifier.width(300.dp),
-        drawerContainerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(vertical = 16.dp)
+    if (isPermanent) {
+        Surface(
+            modifier = modifier.width(260.dp).fillMaxHeight(),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
         ) {
+            SidebarInnerContent(
+                currentRoute = currentRoute,
+                currentLanguage = currentLanguage,
+                onSelectRoute = onSelectRoute,
+                onOpenUserLogin = onOpenUserLogin,
+                creatorName = creatorName,
+                creatorEmail = creatorEmail
+            )
+        }
+    } else {
+        ModalDrawerSheet(
+            modifier = modifier.width(300.dp),
+            drawerContainerColor = MaterialTheme.colorScheme.surface
+        ) {
+            SidebarInnerContent(
+                currentRoute = currentRoute,
+                currentLanguage = currentLanguage,
+                onSelectRoute = onSelectRoute,
+                onOpenUserLogin = onOpenUserLogin,
+                creatorName = creatorName,
+                creatorEmail = creatorEmail
+            )
+        }
+    }
+}
+
+@Composable
+private fun SidebarInnerContent(
+    currentRoute: String,
+    currentLanguage: String,
+    onSelectRoute: (String) -> Unit,
+    onOpenUserLogin: () -> Unit,
+    creatorName: String,
+    creatorEmail: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 16.dp)
+    ) {
             // Header with Account Profile Chip
             Row(
                 modifier = Modifier
@@ -183,4 +226,3 @@ fun SidebarDrawerContent(
             )
         }
     }
-}

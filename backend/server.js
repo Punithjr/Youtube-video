@@ -7,12 +7,14 @@ import path from 'path';
 import fs from 'fs';
 
 import User from './models/User.js';
+import GeneratedVideo from './models/GeneratedVideo.js';
 import { generateVideoContent } from './services/geminiService.js';
 import { textToSpeech } from './services/ttsService.js';
 import { fetchImagesForPrompt } from './services/imageService.js';
 import { renderVideo } from './services/videoRenderer.js';
 import { uploadToYouTube } from './services/youtubeUploader.js';
 import authRoutes from './routes/authRoutes.js';
+import videoRoutes from './routes/videoRoutes.js';
 
 dotenv.config();
 const app = express();
@@ -21,6 +23,7 @@ app.use(express.json());
 app.use(cors());
 
 app.use('/api', authRoutes);
+app.use('/api', videoRoutes);
 
 // Root Health Check Route
 app.get('/', (req, res) => {
@@ -79,11 +82,46 @@ cron.schedule('*/10 * * * *', async () => {
         await renderVideo(imagePaths, audioPath, videoOutputPath);
 
         // 5. YouTube Shorts / Social Media Upload
+        let uploadId = '';
+        let publishedUrl = '';
+        let uploadStatus = 'rendered';
+
         if (platform === 'youtube' && user.youtubeTokens) {
-          await uploadToYouTube(user.youtubeTokens, videoOutputPath, content);
-          console.log(`✅ [Success] ${user.email} ಗಾಗಿ ವೀಡಿಯೊ ಯಶಸ್ವಿಯಾಗಿ ಅಪ್ಲೋಡ್ ಆಗಿದೆ!`);
+          try {
+            const uploadRes = await uploadToYouTube(user.youtubeTokens, videoOutputPath, content);
+            uploadId = uploadRes?.id || `yt_${Date.now()}`;
+            publishedUrl = `https://studio.youtube.com/video/${uploadId}/edit`;
+            uploadStatus = 'uploaded';
+            console.log(`✅ [Success] ${user.email} ಗಾಗಿ ವೀಡಿಯೊ ಯಶಸ್ವಿಯಾಗಿ ಅಪ್ಲೋಡ್ ಆಗಿದೆ!`);
+          } catch (uploadErr) {
+            uploadStatus = 'failed';
+            console.error('⚠️ YouTube ಅಪ್ಲೋಡ್ ದೋಷ:', uploadErr.message);
+          }
         } else {
           console.log(`ℹ️ [Rendered] ವೀಡಿಯೊ ಸಿದ್ಧವಾಗಿದೆ: ${videoOutputPath}. ಟೋಕನ್ ಪರಿಶೀಲಿಸಿ.`);
+        }
+
+        // 5.1 MongoDB ನಲ್ಲಿ ವೀಡಿಯೊ ವಿವರಗಳನ್ನು ಉಳಿಸುವುದು (Track in MongoDB)
+        try {
+          await GeneratedVideo.create({
+            userId: user._id,
+            userEmail: user.email || 'punithjr2@gmail.com',
+            title: content.title || topic,
+            topic: topic,
+            platform: platform || 'youtube',
+            format: user.promptConfig?.format || '9:16 Shorts',
+            language: language || 'en',
+            script: content.script || '',
+            description: content.description || '',
+            visualPrompts: content.visualPrompts || [],
+            durationSec: 60,
+            uploadStatus: uploadStatus,
+            uploadId: uploadId,
+            publishedUrl: publishedUrl
+          });
+          console.log(`💾 [MongoDB] ವೀಡಿಯೊ ವಿವರಗಳು ಯಶಸ್ವಿಯಾಗಿ ಟ್ರ್ಯಾಕ್ ಆಗಿವೆ: ${content.title}`);
+        } catch (dbSaveErr) {
+          console.warn('⚠️ MongoDB ಸೇವ್ ದೋಷ:', dbSaveErr.message);
         }
 
         // 6. ಕ್ಲೀನಪ್ (ಬಳಕೆಯಾದ ಟೆಂಪರರಿ ಫೈಲ್ಗಳನ್ನು ಡಿಲೀಟ್ ಮಾಡುವುದು)

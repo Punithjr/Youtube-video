@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,6 +31,7 @@ fun SocialChannelsScreen(
     currentLanguage: String,
     onNavigateToSettings: () -> Unit,
     onOpenPlatformLogin: (String) -> Unit = {},
+    onNavigateToRoute: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -83,6 +85,85 @@ fun SocialChannelsScreen(
                     Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Edit URLs", fontSize = 11.sp)
+                }
+            }
+        }
+
+        // Google Account Link & Channel Link Details Card (User Requirement)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("google_profile_link_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(StudioCrimson),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = settings.googleAccountName,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = settings.youTubeEmail,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF2EA44F).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "GOOGLE LINKED",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF2EA44F),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    // Account Link Details Breakdown
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Linked Channel:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = "${settings.channelName} (${settings.youTubeHandle})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Google Account ID:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = settings.googleAccountId, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Channel Subscribers:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = "12,500 Subscribers (Verified)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = YouTubeRed)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Authorized Scopes:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(text = "YouTube Studio API, Analytics", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }
@@ -306,6 +387,108 @@ fun SocialChannelsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Open Facebook Page", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // GitHub Data Link Card (User Requirement)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("github_channel_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF24292E)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Code, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(text = "GitHub Data Link", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "https://github.com/${settings.gitHubUsername}/${settings.gitHubRepo}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF2EA44F).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "ACTIVE",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF2EA44F),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Repository: ${settings.gitHubUsername}/${settings.gitHubRepo} (${settings.gitHubBranch})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        OutlinedButton(
+                            onClick = { onNavigateToRoute("github_link") },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.height(28.dp).testTag("manage_github_link_button")
+                        ) {
+                            Text("Manage Sync", fontSize = 10.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { openUrl("https://github.com/${settings.gitHubUsername}/${settings.gitHubRepo}", "GitHub") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24292E)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f).testTag("open_github_repo_button")
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Open GitHub Repo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+
+                        FilledTonalButton(
+                            onClick = { onNavigateToRoute("github_link") },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f).testTag("sync_app_data_button")
+                        ) {
+                            Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Sync App Data", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
                     }
                 }
             }

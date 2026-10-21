@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.MediaItemEntity
 import com.example.i18n.I18n
+import com.example.ui.components.VideoPlayerView
 import com.example.ui.theme.*
 
 @Composable
@@ -40,6 +41,7 @@ fun MediaLibraryScreen(
     var selectedCategory by remember { mutableStateOf("All") }
     var searchQuery by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
+    var previewMediaItem by remember { mutableStateOf<MediaItemEntity?>(null) }
 
     val categories = listOf("All", "Videos", "Shorts", "Images", "Thumbnails", "Audio", "Scripts")
 
@@ -183,22 +185,69 @@ fun MediaLibraryScreen(
 
                             Row {
                                 IconButton(
-                                    onClick = {
-                                        Toast.makeText(context, "Opening preview: ${item.title}", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.size(28.dp)
+                                    onClick = { previewMediaItem = item },
+                                    modifier = Modifier.size(28.dp).testTag("media_preview_button_${item.id}")
                                 ) {
                                     Icon(Icons.Default.Visibility, contentDescription = "Preview", modifier = Modifier.size(16.dp))
                                 }
                                 IconButton(
                                     onClick = { onDeleteMedia(item) },
-                                    modifier = Modifier.size(28.dp)
+                                    modifier = Modifier.size(28.dp).testTag("media_delete_button_${item.id}")
                                 ) {
                                     Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // Video Player Preview Dialog
+    if (previewMediaItem != null) {
+        val item = previewMediaItem!!
+        Dialog(onDismissRequest = { previewMediaItem = null }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth().testTag("media_player_dialog")
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = item.title,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${item.category} • ${item.sizeFormatted}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { previewMediaItem = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+
+                    VideoPlayerView(
+                        videoUri = if (item.uriOrPath.startsWith("http")) item.uriOrPath else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                        title = item.title,
+                        aspectRatio = if (item.category == "Shorts") 9f / 16f else 16f / 9f,
+                        autoPlay = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
