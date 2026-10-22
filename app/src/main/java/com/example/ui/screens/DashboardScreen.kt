@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -31,11 +32,20 @@ import com.example.data.CalendarTaskEntity
 import com.example.data.ContentProjectEntity
 import com.example.data.CreatorSettingsEntity
 import com.example.i18n.I18n
+import com.example.data.CachedGitHubRepoEntity
+import com.example.data.github.GitHubTokenValidationResult
+import com.example.ui.components.GitHubPATWarningBanner
+import com.example.ui.components.GitHubRepoDetailDialog
 import com.example.ui.components.PlatformBadge
 import com.example.ui.components.ProjectStatusBadge
+import com.example.util.YouTubeStudioLinkHelper
 import com.example.ui.components.QuickActionsBar
 import com.example.ui.components.TaskStatusBadge
 import com.example.ui.components.VideoPlayerView
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import java.util.Locale
 import com.example.ui.theme.*
 
 @Composable
@@ -45,12 +55,22 @@ fun DashboardScreen(
     projects: List<ContentProjectEntity>,
     calendarTasks: List<CalendarTaskEntity>,
     autoVideoJobs: List<AutoVideoJobEntity> = emptyList(),
+    cachedGitHubRepos: List<CachedGitHubRepoEntity> = emptyList(),
+    gitHubTokenWarning: GitHubTokenValidationResult? = null,
+    isSyncingGitHubRepos: Boolean = false,
+    onSyncGitHubRepos: () -> Unit = {},
+    onRevokeGitHubPAT: () -> Unit = {},
+    onSelectActiveRepo: ((String, String) -> Unit)? = null,
+    isBatchReprocessing: Boolean = false,
+    onReprocessLast100: () -> Unit = {},
+    onConnectPlatform: (String) -> Unit = {},
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val isKn = currentLanguage == I18n.LANG_KN
     var previewVideoJob by remember { mutableStateOf<AutoVideoJobEntity?>(null) }
+    var selectedRepoForDetail by remember { mutableStateOf<CachedGitHubRepoEntity?>(null) }
 
     fun openBrowserUrl(url: String, service: String) {
         val trimmed = url.trim()
@@ -193,13 +213,32 @@ fun DashboardScreen(
                                     contentColor = Color.White
                                 ),
                                 shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                                 modifier = Modifier.testTag("hero_my_channel_button")
                             ) {
                                 Text(
-                                    text = if (isKn) "ಚಾನೆಲ್" else "MY CHANNEL",
+                                    text = if (isKn) "ಚಾನೆಲ್" else "CHANNEL",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            FilledTonalButton(
+                                onClick = { YouTubeStudioLinkHelper.openYouTubeStudioApp(context) },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = YouTubeRed.copy(alpha = 0.85f),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                                modifier = Modifier.testTag("dashboard_open_yt_studio_app_button")
+                            ) {
+                                Icon(Icons.Default.Launch, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "STUDIO APP",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black
                                 )
                             }
                         }
@@ -254,51 +293,17 @@ fun DashboardScreen(
             }
         }
 
-        // 2. Three Large Platform Cards
+        // 2. YouTube, Facebook & Instagram Main Details Section
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // YouTube Card
-                PlatformOverviewCard(
-                    title = "YouTube",
-                    subtitle = if (isKn) "ಚಾನೆಲ್ & ಸ್ಟುಡಿಯೋ" else "Channel & Studio",
-                    color = YouTubeRed,
-                    icon = Icons.Default.PlayArrow,
-                    statText = "${settings.youtubeSubscribers / 1000}k Subs",
-                    buttonText = if (isKn) "ಚಾನೆಲ್ ತೆರೆಯಿರಿ" else "Open Channel",
-                    onOpen = { openBrowserUrl(settings.youtubeChannelUrl, "YouTube") },
-                    testTag = "platform_card_youtube",
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Instagram Card
-                PlatformOverviewCard(
-                    title = "Instagram",
-                    subtitle = if (isKn) "ರೀಲ್ಸ್ & ಪ್ರೊಫೈಲ್" else "Reels & Feed",
-                    color = InstagramGradientPink,
-                    icon = Icons.Default.CameraAlt,
-                    statText = "${settings.instagramFollowers / 1000}k Followers",
-                    buttonText = if (isKn) "Instagram ತೆರೆಯಿರಿ" else "Open Instagram",
-                    onOpen = { openBrowserUrl(settings.instagramUrl, "Instagram") },
-                    testTag = "platform_card_instagram",
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Facebook Card
-                PlatformOverviewCard(
-                    title = "Facebook",
-                    subtitle = if (isKn) "ಪೇಜ್ & ಸಮುದಾಯ" else "Page & Videos",
-                    color = FacebookBlue,
-                    icon = Icons.Default.ThumbUp,
-                    statText = "${settings.facebookFollowers / 1000}k Followers",
-                    buttonText = if (isKn) "Facebook ತೆರೆಯಿರಿ" else "Open Facebook",
-                    onOpen = { openBrowserUrl(settings.facebookUrl, "Facebook") },
-                    testTag = "platform_card_facebook",
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            SocialPlatformsMainDetailsSection(
+                settings = settings,
+                currentLanguage = currentLanguage,
+                autoVideoJobs = autoVideoJobs,
+                projects = projects,
+                onOpenUrl = { url, svc -> openBrowserUrl(url, svc) },
+                onNavigate = onNavigate,
+                onConnectPlatform = onConnectPlatform
+            )
         }
 
         // 3. 10-Minute Auto Video Generator & Direct Upload Spotlight Card
@@ -378,6 +383,17 @@ fun DashboardScreen(
             )
         }
 
+        // GitHub PAT Warning Banner (Prompt 6)
+        if (gitHubTokenWarning != null) {
+            item {
+                GitHubPATWarningBanner(
+                    validation = gitHubTokenWarning,
+                    onOpenManageToken = { onNavigate("github_link") },
+                    onRevokeToken = onRevokeGitHubPAT
+                )
+            }
+        }
+
         // GitHub Data Link Card on Dashboard
         item {
             Card(
@@ -440,6 +456,155 @@ fun DashboardScreen(
                         modifier = Modifier.height(32.dp).testTag("dashboard_open_github_sync")
                     ) {
                         Text(if (isKn) "ಸಿಂಕ್ ಮಾಡಿ" else "Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // GitHub Repository Metadata Sync List (Prompt 7 & 8)
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("dashboard_github_repos_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Sync, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isKn) "ಸಿಂಕ್ ಮಾಡಲಾದ GitHub ರೆಪೊಸಿಟರಿಗಳು" else "SYNCED GITHUB REPOSITORIES",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Text(
+                                text = "Repository metadata fetched via PAT (${cachedGitHubRepos.size} repos cached)",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Button(
+                            onClick = onSyncGitHubRepos,
+                            enabled = !isSyncingGitHubRepos,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2EA44F)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp).testTag("dashboard_sync_repos_btn")
+                        ) {
+                            if (isSyncingGitHubRepos) {
+                                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    if (cachedGitHubRepos.isEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "No repositories cached yet. Tap 'Sync' or connect PAT in GitHub Data Link.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            cachedGitHubRepos.take(5).forEach { repo ->
+                                val langColor = when (repo.language?.lowercase()) {
+                                    "kotlin" -> Color(0xFF7F52FF)
+                                    "typescript" -> Color(0xFF3178C6)
+                                    "python" -> Color(0xFF3572A5)
+                                    "javascript" -> Color(0xFFF7DF1E)
+                                    "go" -> Color(0xFF00ADD8)
+                                    "rust" -> Color(0xFFDEA584)
+                                    else -> Color(0xFF6E7681)
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedRepoForDetail = repo }
+                                        .testTag("dashboard_repo_item_${repo.name}")
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = repo.name,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                if (repo.name.equals(settings.gitHubRepo, ignoreCase = true)) {
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = StudioCrimson.copy(alpha = 0.15f)
+                                                    ) {
+                                                        Text("TARGET", fontSize = 8.sp, fontWeight = FontWeight.Black, color = StudioCrimson, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                                                    }
+                                                }
+                                            }
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(langColor))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(text = repo.language ?: "Code", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                Text(text = "⭐ ${repo.stargazersCount}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(text = "🍴 ${repo.forksCount}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Details",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Icon(
+                                                imageVector = Icons.Default.ChevronRight,
+                                                contentDescription = "View Details",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -665,8 +830,32 @@ fun DashboardScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                TextButton(onClick = { onNavigate("auto_generator") }) {
-                    Text(text = if (isKn) "ಎಲ್ಲಾ ವೀಡಿಯೊಗಳು" else "View All / Generator", fontSize = 12.sp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Button(
+                        onClick = onReprocessLast100,
+                        enabled = !isBatchReprocessing,
+                        colors = ButtonDefaults.buttonColors(containerColor = StudioCrimson),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier
+                            .height(28.dp)
+                            .testTag("dashboard_reprocess_last_100_button")
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = if (isBatchReprocessing) "Reprocessing..." else "Reprocess 100",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    TextButton(onClick = { onNavigate("auto_generator") }) {
+                        Text(text = if (isKn) "ಎಲ್ಲಾ ವೀಡಿಯೊಗಳು" else "View All", fontSize = 11.sp)
+                    }
                 }
             }
         }
@@ -760,6 +949,15 @@ fun DashboardScreen(
 
                         Spacer(modifier = Modifier.width(4.dp))
 
+                        if (job.platform.equals("YouTube", ignoreCase = true)) {
+                            IconButton(
+                                onClick = { YouTubeStudioLinkHelper.openYouTubeStudioApp(context, job.uploadId) },
+                                modifier = Modifier.size(32.dp).testTag("dashboard_job_yt_studio_${job.id}")
+                            ) {
+                                Icon(Icons.Default.Launch, contentDescription = "Studio App", tint = YouTubeRed, modifier = Modifier.size(18.dp))
+                            }
+                        }
+
                         IconButton(
                             onClick = { previewVideoJob = job },
                             modifier = Modifier.size(32.dp).testTag("preview_job_${job.id}")
@@ -852,6 +1050,14 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+
+    if (selectedRepoForDetail != null) {
+        GitHubRepoDetailDialog(
+            repo = selectedRepoForDetail,
+            onDismiss = { selectedRepoForDetail = null },
+            onSetAsActiveRepo = onSelectActiveRepo
+        )
     }
 }
 
@@ -1027,6 +1233,950 @@ private fun MetricSummaryCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1
             )
+        }
+    }
+}
+
+private fun formatNumber(count: Long): String {
+    return when {
+        count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)
+        count >= 1_000 -> String.format(Locale.US, "%.1fK", count / 1_000.0)
+        else -> count.toString()
+    }
+}
+
+private fun formatNumber(count: Int): String = formatNumber(count.toLong())
+
+@Composable
+fun SocialPlatformsMainDetailsSection(
+    settings: CreatorSettingsEntity,
+    currentLanguage: String,
+    autoVideoJobs: List<AutoVideoJobEntity>,
+    projects: List<ContentProjectEntity>,
+    onOpenUrl: (String, String) -> Unit,
+    onNavigate: (String) -> Unit,
+    onConnectPlatform: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val isKn = currentLanguage == I18n.LANG_KN
+    var selectedTab by remember { mutableStateOf("all") }
+
+    val ytJobsCount = autoVideoJobs.count { it.platform.equals("YouTube", true) || it.platform.equals("All", true) }
+    val fbJobsCount = autoVideoJobs.count { it.platform.equals("Facebook", true) || it.platform.equals("All", true) }
+    val igJobsCount = autoVideoJobs.count { it.platform.equals("Instagram", true) || it.platform.equals("All", true) }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Section Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = null,
+                        tint = StudioCrimson,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isKn) "ಮುಖ್ಯ ಚಾನೆಲ್‌ಗಳು & ಪುಟಗಳ ವಿವರಗಳು" else "YOUTUBE, FACEBOOK & INSTAGRAM DETAILS",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+                Text(
+                    text = if (isKn) "ಲೈವ್ ಚಾನೆಲ್ ಅಂಕಿಅಂಶಗಳು, ಲಾಗಿನ್ ಖಾತೆಗಳು & ನೇರ ಸ್ಟುಡಿಯೋ ನಿಯಂತ್ರಣಗಳು"
+                    else "Live channel status, account handles, metrics & direct studio tools",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            TextButton(
+                onClick = { onNavigate("social_channels") },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = if (isKn) "ಎಲ್ಲಾ ಚಾನೆಲ್‌ಗಳು" else "Social Hub",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Icon(
+                    imageVector = Icons.Default.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+
+        // Platform Filter Tabs (All Channels, YouTube, Facebook, Instagram)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = selectedTab == "all",
+                onClick = { selectedTab = "all" },
+                label = { Text("All Platforms (3)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                leadingIcon = {
+                    Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(14.dp))
+                }
+            )
+
+            FilterChip(
+                selected = selectedTab == "youtube",
+                onClick = { selectedTab = "youtube" },
+                label = { Text("YouTube", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                leadingIcon = {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(YouTubeRed)
+                    )
+                }
+            )
+
+            FilterChip(
+                selected = selectedTab == "facebook",
+                onClick = { selectedTab = "facebook" },
+                label = { Text("Facebook", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                leadingIcon = {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(FacebookBlue)
+                    )
+                }
+            )
+
+            FilterChip(
+                selected = selectedTab == "instagram",
+                onClick = { selectedTab = "instagram" },
+                label = { Text("Instagram", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                leadingIcon = {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(InstagramGradientPink)
+                    )
+                }
+            )
+        }
+
+        // YouTube Details Card
+        if (selectedTab == "all" || selectedTab == "youtube") {
+            YouTubePlatformDetailCard(
+                settings = settings,
+                isKn = isKn,
+                uploadedCount = ytJobsCount,
+                onOpenUrl = { onOpenUrl(settings.youtubeChannelUrl, "YouTube") },
+                onOpenStudioApp = { YouTubeStudioLinkHelper.openYouTubeStudioApp(context) },
+                onNavigate = onNavigate,
+                onConnectPlatform = { onConnectPlatform("YouTube") }
+            )
+        }
+
+        // Facebook Details Card
+        if (selectedTab == "all" || selectedTab == "facebook") {
+            FacebookPlatformDetailCard(
+                settings = settings,
+                isKn = isKn,
+                uploadedCount = fbJobsCount,
+                onOpenUrl = { onOpenUrl(settings.facebookUrl, "Facebook") },
+                onNavigate = onNavigate,
+                onConnectPlatform = { onConnectPlatform("Facebook") }
+            )
+        }
+
+        // Instagram Details Card
+        if (selectedTab == "all" || selectedTab == "instagram") {
+            InstagramPlatformDetailCard(
+                settings = settings,
+                isKn = isKn,
+                uploadedCount = igJobsCount,
+                onOpenUrl = { onOpenUrl(settings.instagramUrl, "Instagram") },
+                onNavigate = onNavigate,
+                onConnectPlatform = { onConnectPlatform("Instagram") }
+            )
+        }
+
+        // Cross-Platform Combined Audience Card
+        CombinedAudienceCard(
+            settings = settings,
+            totalJobs = autoVideoJobs.size,
+            isKn = isKn,
+            onOpenStudioApp = { YouTubeStudioLinkHelper.openYouTubeStudioApp(context) },
+            onNavigate = onNavigate
+        )
+    }
+}
+
+@Composable
+private fun YouTubePlatformDetailCard(
+    settings: CreatorSettingsEntity,
+    isKn: Boolean,
+    uploadedCount: Int,
+    onOpenUrl: () -> Unit,
+    onOpenStudioApp: () -> Unit,
+    onNavigate: (String) -> Unit,
+    onConnectPlatform: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("platform_card_youtube"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, YouTubeRed.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header: Icon, Title & Connection Status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(YouTubeRed),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "YouTube Main Channel",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Verified",
+                                tint = YouTubeRed,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        Text(
+                            text = "${settings.channelName} • ${settings.youTubeHandle}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (settings.isYouTubeConnected) Color(0xFF2EA44F).copy(alpha = 0.15f) else StudioAmber.copy(alpha = 0.2f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (settings.isYouTubeConnected) Color(0xFF2EA44F) else StudioAmber)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (settings.isYouTubeConnected) "CONNECTED" else "NOT CONNECTED",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            color = if (settings.isYouTubeConnected) Color(0xFF2EA44F) else StudioAmber
+                        )
+                    }
+                }
+            }
+
+            // Google Account & Channel Details Row
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Account: ${settings.googleAccountName} (${settings.youTubeEmail})",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Channel URL: ${settings.youtubeChannelUrl}",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1
+                        )
+                    }
+                    Text(
+                        text = "ID: ${settings.googleAccountId.take(6)}...",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Metrics Grid (3 stats)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PlatformMetricBox(
+                    title = "Subscribers",
+                    value = formatNumber(settings.youtubeSubscribers),
+                    color = YouTubeRed,
+                    icon = Icons.Default.People,
+                    modifier = Modifier.weight(1f)
+                )
+                PlatformMetricBox(
+                    title = "Monthly Views",
+                    value = formatNumber(settings.monthlyViews),
+                    color = StudioAmber,
+                    icon = Icons.Default.Visibility,
+                    modifier = Modifier.weight(1f)
+                )
+                PlatformMetricBox(
+                    title = "Published Content",
+                    value = "$uploadedCount Jobs",
+                    color = MaterialTheme.colorScheme.primary,
+                    icon = Icons.Default.VideoLibrary,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Button(
+                    onClick = onOpenStudioApp,
+                    colors = ButtonDefaults.buttonColors(containerColor = YouTubeRed),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .testTag("dashboard_open_yt_studio_app_btn")
+                ) {
+                    Icon(Icons.Default.Launch, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("STUDIO APP", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                }
+
+                FilledTonalButton(
+                    onClick = onOpenUrl,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Channel", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onNavigate("youtube") },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("YouTube Tool", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = { onNavigate("create_video") },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Create Video", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = onConnectPlatform,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1.1f)
+                ) {
+                    Text(if (settings.isYouTubeConnected) "Manage Login" else "Connect Account", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FacebookPlatformDetailCard(
+    settings: CreatorSettingsEntity,
+    isKn: Boolean,
+    uploadedCount: Int,
+    onOpenUrl: () -> Unit,
+    onNavigate: (String) -> Unit,
+    onConnectPlatform: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("platform_card_facebook"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, FacebookBlue.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header: Icon, Title & Connection Status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(FacebookBlue),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ThumbUp,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Facebook Main Page",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Verified",
+                                tint = FacebookBlue,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        Text(
+                            text = "${settings.facebookPageName} • Page ID: 849201948",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (settings.isFacebookConnected) Color(0xFF2EA44F).copy(alpha = 0.15f) else StudioAmber.copy(alpha = 0.2f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (settings.isFacebookConnected) Color(0xFF2EA44F) else StudioAmber)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (settings.isFacebookConnected) "CONNECTED" else "NOT CONNECTED",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            color = if (settings.isFacebookConnected) Color(0xFF2EA44F) else StudioAmber
+                        )
+                    }
+                }
+            }
+
+            // Page Details Row
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Page: ${settings.facebookPageName} (Official Creator Community)",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "URL: ${settings.facebookUrl}",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1
+                        )
+                    }
+                    Text(
+                        text = "Verified Hub",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FacebookBlue
+                    )
+                }
+            }
+
+            // Metrics Grid (3 stats)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PlatformMetricBox(
+                    title = "Page Followers",
+                    value = formatNumber(settings.facebookFollowers),
+                    color = FacebookBlue,
+                    icon = Icons.Default.ThumbUp,
+                    modifier = Modifier.weight(1f)
+                )
+                PlatformMetricBox(
+                    title = "Monthly Reach",
+                    value = "45.2K",
+                    color = StudioAmber,
+                    icon = Icons.Default.TrendingUp,
+                    modifier = Modifier.weight(1f)
+                )
+                PlatformMetricBox(
+                    title = "Published Content",
+                    value = "$uploadedCount Posts",
+                    color = MaterialTheme.colorScheme.primary,
+                    icon = Icons.Default.DynamicFeed,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Button(
+                    onClick = onOpenUrl,
+                    colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Icon(Icons.Default.ThumbUp, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("OPEN PAGE", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                }
+
+                FilledTonalButton(
+                    onClick = { onNavigate("facebook") },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Facebook Tool", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onNavigate("shorts_reels") },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Create FB Reel", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = onConnectPlatform,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1.1f)
+                ) {
+                    Text(if (settings.isFacebookConnected) "Manage Page" else "Connect Page", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InstagramPlatformDetailCard(
+    settings: CreatorSettingsEntity,
+    isKn: Boolean,
+    uploadedCount: Int,
+    onOpenUrl: () -> Unit,
+    onNavigate: (String) -> Unit,
+    onConnectPlatform: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("platform_card_instagram"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, InstagramGradientPink.copy(alpha = 0.35f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header: Icon, Title & Connection Status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(InstagramGradientPink),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Instagram Main Profile",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Verified",
+                                tint = InstagramGradientPink,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        Text(
+                            text = "${settings.instagramHandle} • Creator Profile",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (settings.isInstagramConnected) Color(0xFF2EA44F).copy(alpha = 0.15f) else StudioAmber.copy(alpha = 0.2f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (settings.isInstagramConnected) Color(0xFF2EA44F) else StudioAmber)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (settings.isInstagramConnected) "CONNECTED" else "NOT CONNECTED",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            color = if (settings.isInstagramConnected) Color(0xFF2EA44F) else StudioAmber
+                        )
+                    }
+                }
+            }
+
+            // Profile Details Row
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Handle: ${settings.instagramHandle} (Reels & Feed)",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "URL: ${settings.instagramUrl}",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1
+                        )
+                    }
+                    Text(
+                        text = "Official Profile",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = InstagramGradientPink
+                    )
+                }
+            }
+
+            // Metrics Grid (3 stats)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PlatformMetricBox(
+                    title = "Followers",
+                    value = formatNumber(settings.instagramFollowers),
+                    color = InstagramGradientPink,
+                    icon = Icons.Default.People,
+                    modifier = Modifier.weight(1f)
+                )
+                PlatformMetricBox(
+                    title = "Reels Views",
+                    value = "92.8K",
+                    color = StudioAmber,
+                    icon = Icons.Default.Visibility,
+                    modifier = Modifier.weight(1f)
+                )
+                PlatformMetricBox(
+                    title = "Published Reels",
+                    value = "$uploadedCount Reels",
+                    color = MaterialTheme.colorScheme.primary,
+                    icon = Icons.Default.Smartphone,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Button(
+                    onClick = onOpenUrl,
+                    colors = ButtonDefaults.buttonColors(containerColor = InstagramGradientPink),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("OPEN INSTAGRAM", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                }
+
+                FilledTonalButton(
+                    onClick = { onNavigate("instagram") },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Instagram Tool", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onNavigate("shorts_reels") },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Create Reel", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = onConnectPlatform,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1.1f)
+                ) {
+                    Text(if (settings.isInstagramConnected) "Manage Profile" else "Connect Account", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlatformMetricBox(
+    title: String,
+    value: String,
+    color: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = title,
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun CombinedAudienceCard(
+    settings: CreatorSettingsEntity,
+    totalJobs: Int,
+    isKn: Boolean,
+    onOpenStudioApp: () -> Unit,
+    onNavigate: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val totalAudience = settings.youtubeSubscribers + settings.facebookFollowers + settings.instagramFollowers
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("dashboard_combined_audience_card"),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isKn) "ಒಟ್ಟು ಸಾಮಾಜಿಕ ಪ್ರೇಕ್ಷಕರು" else "TOTAL MULTI-PLATFORM AUDIENCE",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${formatNumber(totalAudience)} Audience",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Across YouTube, Facebook & Instagram • ${settings.engagementRate}% Engagement",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Button(
+                onClick = onOpenStudioApp,
+                colors = ButtonDefaults.buttonColors(containerColor = YouTubeRed),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(Icons.Default.Launch, contentDescription = null, modifier = Modifier.size(13.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("STUDIO APP", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

@@ -42,6 +42,14 @@ fun CreatorStudioApp(
     val globalLoadingState by viewModel.globalLoadingState.collectAsStateWithLifecycle()
     val allVideos by viewModel.allVideos.collectAsStateWithLifecycle()
     val mangaStories by viewModel.mangaStories.collectAsStateWithLifecycle()
+    val cachedGitHubRepos by viewModel.cachedGitHubRepos.collectAsStateWithLifecycle()
+    val gitHubTokenWarning by viewModel.gitHubTokenWarning.collectAsStateWithLifecycle()
+    val isSyncingGitHubRepos by viewModel.isSyncingGitHubRepos.collectAsStateWithLifecycle()
+    val isBatchReprocessing by viewModel.isBatchReprocessing.collectAsStateWithLifecycle()
+    val batchReprocessTotal by viewModel.batchReprocessTotal.collectAsStateWithLifecycle()
+    val batchReprocessCurrent by viewModel.batchReprocessCurrent.collectAsStateWithLifecycle()
+    val batchReprocessProgress by viewModel.batchReprocessProgress.collectAsStateWithLifecycle()
+    val batchReprocessStatus by viewModel.batchReprocessStatus.collectAsStateWithLifecycle()
     val currentRoute by viewModel.currentRoute.collectAsStateWithLifecycle()
 
     var showWizardDialog by remember { mutableStateOf(false) }
@@ -127,6 +135,15 @@ fun CreatorStudioApp(
                         isSchedulerActive = isAutoSchedulerActive,
                         countdownSeconds = countdownSeconds,
                         isGeneratingNow = isGeneratingNow,
+                        isBatchReprocessing = isBatchReprocessing,
+                        batchReprocessTotal = batchReprocessTotal,
+                        batchReprocessCurrent = batchReprocessCurrent,
+                        batchReprocessProgress = batchReprocessProgress,
+                        batchReprocessStatus = batchReprocessStatus,
+                        onReprocessLast100 = { viewModel.reprocessLast100Jobs() },
+                        onReprocessAll = { viewModel.reprocessAllJobs() },
+                        onReprocessJob = { viewModel.reprocessJob(it) },
+                        onCancelBatchReprocess = { viewModel.cancelBatchReprocess() },
                         onToggleScheduler = { viewModel.toggleAutoScheduler(it) },
                         onTriggerAutoRun = { topic, platform, format, lang ->
                             viewModel.trigger10MinuteAutoVideoRun(topic, platform, format, lang)
@@ -302,6 +319,14 @@ fun CreatorStudioApp(
                         projects = projects,
                         calendarTasks = calendarTasks,
                         autoVideoJobs = autoVideoJobs,
+                        cachedGitHubRepos = cachedGitHubRepos,
+                        gitHubTokenWarning = gitHubTokenWarning,
+                        isSyncingGitHubRepos = isSyncingGitHubRepos,
+                        onSyncGitHubRepos = { viewModel.syncGitHubRepositoryMetadata() },
+                        onRevokeGitHubPAT = { viewModel.revokeGitHubPAT() },
+                        isBatchReprocessing = isBatchReprocessing,
+                        onReprocessLast100 = { viewModel.reprocessLast100Jobs() },
+                        onConnectPlatform = { platform -> selectedPlatformForLogin = platform },
                         onNavigate = { route -> viewModel.navigateTo(route) }
                     )
                 }
@@ -377,7 +402,10 @@ fun CreatorStudioApp(
                 viewModel.saveSettings(updated)
                 showWizardDialog = false
             },
-            onDismiss = { showWizardDialog = false }
+            onDismiss = {
+                viewModel.saveSettings(settings.copy(wizardCompleted = true))
+                showWizardDialog = false
+            }
         )
     }
 

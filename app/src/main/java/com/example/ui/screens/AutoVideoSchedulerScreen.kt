@@ -39,6 +39,8 @@ import com.example.ui.components.UserLoginDialog
 import com.example.ui.components.VideoGenerationProgressIndicator
 import com.example.ui.components.VideoPlayerView
 import com.example.ui.theme.*
+import com.example.util.YouTubeStudioAppLinkCard
+import com.example.util.YouTubeStudioLinkHelper
 
 @Composable
 fun AutoVideoSchedulerScreen(
@@ -49,6 +51,15 @@ fun AutoVideoSchedulerScreen(
     isSchedulerActive: Boolean,
     countdownSeconds: Int,
     isGeneratingNow: Boolean,
+    isBatchReprocessing: Boolean = false,
+    batchReprocessTotal: Int = 0,
+    batchReprocessCurrent: Int = 0,
+    batchReprocessProgress: Float = 0f,
+    batchReprocessStatus: String = "",
+    onReprocessLast100: () -> Unit = {},
+    onReprocessAll: () -> Unit = {},
+    onReprocessJob: (AutoVideoJobEntity) -> Unit = {},
+    onCancelBatchReprocess: () -> Unit = {},
     onToggleScheduler: (Boolean) -> Unit,
     onTriggerAutoRun: (String, String, String, String) -> Unit,
     onDeleteJob: (AutoVideoJobEntity) -> Unit,
@@ -77,6 +88,7 @@ fun AutoVideoSchedulerScreen(
     var showAddPromptDialog by remember { mutableStateOf(false) }
     var showUserLoginDialog by remember { mutableStateOf(false) }
     var selectedPlatformForLogin by remember { mutableStateOf<String?>(null) }
+    var previewVideoJob by remember { mutableStateOf<AutoVideoJobEntity?>(null) }
 
     // Prompt search & filter
     var promptSearchQuery by remember { mutableStateOf("") }
@@ -354,24 +366,128 @@ fun AutoVideoSchedulerScreen(
                 }
             }
 
+            // YouTube Studio App Linking Card (Direct User Request)
+            item {
+                YouTubeStudioAppLinkCard(
+                    currentLanguage = currentLanguage,
+                    channelName = settings.channelName,
+                    customStudioUrl = settings.youtubeStudioUrl
+                )
+            }
+
             // Past Auto-Generated & Uploaded Videos Feed
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = if (isKn) "ಆಟೋ-ಅಪ್‌ಲೋಡ್ ಮಾಡಿದ ವೀಡಿಯೊಗಳು (${autoVideoJobs.size})"
-                        else "AUTO-UPLOADED VIDEOS (${autoVideoJobs.size})",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = if (isKn) "ಆಟೋ-ಅಪ್‌ಲೋಡ್ ಮಾಡಿದ ವೀಡಿಯೊಗಳು (${autoVideoJobs.size})"
+                            else "AUTO-UPLOADED VIDEOS (${autoVideoJobs.size})",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
 
-                    if (autoVideoJobs.isNotEmpty()) {
-                        TextButton(onClick = onClearAllJobs) {
-                            Text("Clear History", fontSize = 11.sp, color = Color.Red)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Button(
+                                onClick = onReprocessLast100,
+                                enabled = !isBatchReprocessing,
+                                colors = ButtonDefaults.buttonColors(containerColor = StudioCrimson),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .testTag("reprocess_last_100_button")
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Reprocess 100", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            FilledTonalButton(
+                                onClick = onReprocessAll,
+                                enabled = !isBatchReprocessing,
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .testTag("reprocess_all_button")
+                            ) {
+                                Text("All", fontSize = 10.sp)
+                            }
+
+                            if (autoVideoJobs.isNotEmpty()) {
+                                TextButton(onClick = onClearAllJobs, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                                    Text("Clear", fontSize = 11.sp, color = Color.Red)
+                                }
+                            }
+                        }
+                    }
+
+                    // Live Batch Reprocessing Banner
+                    if (isBatchReprocessing) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("batch_reprocess_banner"),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(18.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Reprocessing Batch ($batchReprocessCurrent / $batchReprocessTotal)",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = onCancelBatchReprocess,
+                                        shape = RoundedCornerShape(6.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier
+                                            .height(26.dp)
+                                            .testTag("cancel_reprocess_button")
+                                    ) {
+                                        Text("Cancel", fontSize = 10.sp, color = Color.Red)
+                                    }
+                                }
+
+                                LinearProgressIndicator(
+                                    progress = { batchReprocessProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                )
+
+                                Text(
+                                    text = batchReprocessStatus,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                )
+                            }
                         }
                     }
                 }
@@ -492,7 +608,52 @@ fun AutoVideoSchedulerScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Button(
+                                        onClick = { previewVideoJob = job },
+                                        colors = ButtonDefaults.buttonColors(containerColor = StudioPurple),
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                        modifier = Modifier
+                                            .height(30.dp)
+                                            .testTag("preview_auto_job_${job.id}")
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("Preview", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { onReprocessJob(job) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                        modifier = Modifier
+                                            .height(30.dp)
+                                            .testTag("reprocess_job_${job.id}")
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("Reprocess", fontSize = 9.sp)
+                                    }
+
+                                    if (job.platform.equals("YouTube", ignoreCase = true)) {
+                                        Button(
+                                            onClick = {
+                                                YouTubeStudioLinkHelper.openYouTubeStudioApp(context, job.uploadId)
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = YouTubeRed),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                            modifier = Modifier
+                                                .height(30.dp)
+                                                .testTag("open_yt_studio_app_${job.id}")
+                                        ) {
+                                            Icon(Icons.Default.Launch, contentDescription = null, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text("Studio App", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
                                     OutlinedButton(
                                         onClick = {
                                             val fullPkg = "Title: ${job.title}\n\nScript:\n${job.scriptText}\n\nVisual Prompts:\n1. ${job.visualPrompt1}\n2. ${job.visualPrompt2}\n3. ${job.visualPrompt3}\n\nDescription:\n${job.description}"
@@ -500,22 +661,22 @@ fun AutoVideoSchedulerScreen(
                                             Toast.makeText(context, "Copied video package!", Toast.LENGTH_SHORT).show()
                                         },
                                         shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                                         modifier = Modifier.height(30.dp)
                                     ) {
-                                        Text("Copy", fontSize = 10.sp)
+                                        Text("Copy", fontSize = 9.sp)
                                     }
 
                                     Button(
                                         onClick = { openUrl(job.uploadUrl) },
                                         colors = ButtonDefaults.buttonColors(containerColor = StudioCrimson),
                                         shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
                                         modifier = Modifier.height(30.dp)
                                     ) {
                                         Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Open Video", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("Open", fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -954,6 +1115,126 @@ fun AutoVideoSchedulerScreen(
             },
             onDismiss = { selectedPlatformForLogin = null }
         )
+    }
+
+    // Auto Video Job Interactive Preview Dialog
+    if (previewVideoJob != null) {
+        val job = previewVideoJob!!
+        Dialog(onDismissRequest = { previewVideoJob = null }) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("auto_video_preview_dialog")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = job.title,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = "${job.platform} • ${job.format} • ${job.durationSec}s",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { previewVideoJob = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+
+                    VideoPlayerView(
+                        videoUri = if (job.uploadUrl.startsWith("http") && job.uploadUrl.endsWith(".mp4")) job.uploadUrl else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                        title = job.title,
+                        aspectRatio = if (job.format.contains("9:16")) 9f / 16f else 16f / 9f,
+                        autoPlay = true,
+                        sceneMarkers = listOf("Scene 1", "Scene 2", "Scene 3"),
+                        visualPrompts = listOf(job.visualPrompt1, job.visualPrompt2, job.visualPrompt3).filter { it.isNotBlank() },
+                        scriptText = job.scriptText,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Visual prompts card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("🎨 3 Generated Visual Scene Prompts:", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = StudioPurple)
+                            if (job.visualPrompt1.isNotBlank()) Text("1️⃣ ${job.visualPrompt1}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (job.visualPrompt2.isNotBlank()) Text("2️⃣ ${job.visualPrompt2}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (job.visualPrompt3.isNotBlank()) Text("3️⃣ ${job.visualPrompt3}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    // Voiceover Script preview
+                    if (job.scriptText.isNotBlank()) {
+                        Text(
+                            text = "🎙 Voiceover Script: \"${job.scriptText}\"",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            lineHeight = 14.sp
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (job.platform.equals("YouTube", true)) {
+                            Button(
+                                onClick = {
+                                    YouTubeStudioLinkHelper.openYouTubeStudioApp(context, job.uploadId)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = YouTubeRed),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Launch, contentDescription = null, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Studio App", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val fullPkg = "Title: ${job.title}\n\nScript:\n${job.scriptText}\n\nVisual Prompts:\n1. ${job.visualPrompt1}\n2. ${job.visualPrompt2}\n3. ${job.visualPrompt3}"
+                                clipboardManager.setText(AnnotatedString(fullPkg))
+                                Toast.makeText(context, "Copied video package!", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(0.9f)
+                        ) {
+                            Text("Copy Pkg", fontSize = 10.sp)
+                        }
+
+                        Button(
+                            onClick = { previewVideoJob = null },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(0.8f)
+                        ) {
+                            Text("Close", fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

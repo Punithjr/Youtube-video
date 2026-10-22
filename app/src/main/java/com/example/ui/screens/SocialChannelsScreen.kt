@@ -252,18 +252,27 @@ fun SocialChannelsScreen(
                         }
 
                         Button(
-                            onClick = { openUrl(settings.youtubeStudioUrl, "YouTube Studio") },
+                            onClick = { com.example.util.YouTubeStudioLinkHelper.openYouTubeStudioApp(context) },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.3f)),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f).testTag("social_open_yt_studio_btn")
                         ) {
-                            Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Launch, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("YouTube Studio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            Text("Studio App", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                         }
                     }
                 }
             }
+        }
+
+        // Direct YouTube Studio App Link Card
+        item {
+            com.example.util.YouTubeStudioAppLinkCard(
+                currentLanguage = currentLanguage,
+                channelName = settings.channelName,
+                customStudioUrl = settings.youtubeStudioUrl
+            )
         }
 
         // Instagram Channel Card

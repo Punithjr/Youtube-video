@@ -20,9 +20,10 @@ import kotlinx.coroutines.launch
         PromptTemplateEntity::class,
         VideoMetadataEntity::class,
         MangaStoryEntity::class,
-        MangaChapterEntity::class
+        MangaChapterEntity::class,
+        CachedGitHubRepoEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,6 +37,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun videoMetadataDao(): VideoMetadataDao
     abstract fun mangaStoryDao(): MangaStoryDao
     abstract fun mangaChapterDao(): MangaChapterDao
+    abstract fun gitHubRepoDao(): GitHubRepoDao
 
     companion object {
         @Volatile

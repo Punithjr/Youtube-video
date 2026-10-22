@@ -12,6 +12,18 @@ import java.util.concurrent.TimeUnit
 
 interface GitHubApiService {
 
+    @GET("user")
+    suspend fun getAuthenticatedUser(
+        @Header("Authorization") authHeader: String
+    ): Response<GitHubUser>
+
+    @GET("user/repos")
+    suspend fun getAuthenticatedRepos(
+        @Query("sort") sort: String = "updated",
+        @Query("per_page") perPage: Int = 50,
+        @Header("Authorization") authHeader: String
+    ): Response<List<GitHubRepo>>
+
     @GET("users/{username}")
     suspend fun getUserProfile(
         @Path("username") username: String,

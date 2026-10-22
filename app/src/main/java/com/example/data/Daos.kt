@@ -88,8 +88,17 @@ interface AutoVideoJobDao {
     @Query("SELECT * FROM auto_video_jobs ORDER BY createdAt DESC")
     fun getAllJobs(): Flow<List<AutoVideoJobEntity>>
 
+    @Query("SELECT * FROM auto_video_jobs ORDER BY createdAt DESC LIMIT :limit")
+    suspend fun getLastNJobs(limit: Int = 100): List<AutoVideoJobEntity>
+
+    @Query("SELECT * FROM auto_video_jobs WHERE id = :id LIMIT 1")
+    suspend fun getJobById(id: Long): AutoVideoJobEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertJob(job: AutoVideoJobEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(jobs: List<AutoVideoJobEntity>): List<Long>
 
     @Update
     suspend fun updateJob(job: AutoVideoJobEntity)
@@ -230,5 +239,24 @@ interface MangaChapterDao {
     @Query("DELETE FROM manga_chapters WHERE storyId = :storyId")
     suspend fun deleteChaptersForStory(storyId: Long)
 }
+
+@Dao
+interface GitHubRepoDao {
+    @Query("SELECT * FROM cached_github_repos ORDER BY stargazersCount DESC, name ASC")
+    fun getAllCachedRepos(): Flow<List<CachedGitHubRepoEntity>>
+
+    @Query("SELECT * FROM cached_github_repos WHERE id = :id LIMIT 1")
+    suspend fun getRepoById(id: Long): CachedGitHubRepoEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRepos(repos: List<CachedGitHubRepoEntity>)
+
+    @Query("DELETE FROM cached_github_repos")
+    suspend fun clearAllRepos()
+
+    @Query("DELETE FROM cached_github_repos WHERE id = :id")
+    suspend fun deleteRepoById(id: Long)
+}
+
 
 

@@ -131,15 +131,24 @@ Timestamps:
                         Text("Channel", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     OutlinedButton(
-                        onClick = { openUrl(settings.youtubeStudioUrl) },
+                        onClick = { com.example.util.YouTubeStudioLinkHelper.openYouTubeStudioApp(context) },
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         modifier = Modifier.testTag("yt_tool_open_studio")
                     ) {
-                        Text("Studio", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Studio App", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
+        }
+
+        // Official YouTube Studio App Link Card
+        item {
+            com.example.util.YouTubeStudioAppLinkCard(
+                currentLanguage = currentLanguage,
+                channelName = settings.channelName,
+                customStudioUrl = settings.youtubeStudioUrl
+            )
         }
 
         // Topic Input

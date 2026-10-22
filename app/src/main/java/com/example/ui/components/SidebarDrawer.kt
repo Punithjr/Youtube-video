@@ -59,6 +59,7 @@ fun SidebarDrawerContent(
     currentLanguage: String,
     onSelectRoute: (String) -> Unit,
     onOpenUserLogin: () -> Unit = {},
+    onCloseDrawer: () -> Unit = {},
     creatorName: String = "Pro Creator",
     creatorEmail: String = "creator@gmail.com",
     isPermanent: Boolean = false,
@@ -76,8 +77,10 @@ fun SidebarDrawerContent(
                 currentLanguage = currentLanguage,
                 onSelectRoute = onSelectRoute,
                 onOpenUserLogin = onOpenUserLogin,
+                onCloseDrawer = onCloseDrawer,
                 creatorName = creatorName,
-                creatorEmail = creatorEmail
+                creatorEmail = creatorEmail,
+                isPermanent = true
             )
         }
     } else {
@@ -90,8 +93,10 @@ fun SidebarDrawerContent(
                 currentLanguage = currentLanguage,
                 onSelectRoute = onSelectRoute,
                 onOpenUserLogin = onOpenUserLogin,
+                onCloseDrawer = onCloseDrawer,
                 creatorName = creatorName,
-                creatorEmail = creatorEmail
+                creatorEmail = creatorEmail,
+                isPermanent = false
             )
         }
     }
@@ -103,15 +108,17 @@ private fun SidebarInnerContent(
     currentLanguage: String,
     onSelectRoute: (String) -> Unit,
     onOpenUserLogin: () -> Unit,
+    onCloseDrawer: () -> Unit,
     creatorName: String,
-    creatorEmail: String
+    creatorEmail: String,
+    isPermanent: Boolean
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(vertical = 16.dp)
     ) {
-            // Header with Account Profile Chip
+            // Header with Account Profile Chip & Close Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -150,15 +157,30 @@ private fun SidebarInnerContent(
                     }
                 }
 
-                IconButton(
-                    onClick = onOpenUserLogin,
-                    modifier = Modifier.size(32.dp).testTag("drawer_profile_login_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = "User Login",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onOpenUserLogin,
+                        modifier = Modifier.size(32.dp).testTag("drawer_profile_login_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "User Login",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    if (!isPermanent) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = onCloseDrawer,
+                            modifier = Modifier.size(32.dp).testTag("drawer_close_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close Menu",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
 

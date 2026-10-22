@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class CreatorStudioViewModel(application: Application) : AndroidViewModel(application) {
@@ -82,6 +83,152 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
             initialValue = emptyList()
         )
 
+    // GitHub Integration & Synchronization Service
+    private val gitHubRepository = com.example.data.github.GitHubRepository()
+    private val firestoreSyncManager = com.example.data.firebase.FirestoreSyncManager(application, repository, viewModelScope)
+
+    val cachedGitHubRepos: StateFlow<List<CachedGitHubRepoEntity>> = repository.cachedGitHubRepos
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    private val _gitHubTokenWarning = MutableStateFlow<com.example.data.github.GitHubTokenValidationResult?>(null)
+    val gitHubTokenWarning: StateFlow<com.example.data.github.GitHubTokenValidationResult?> = _gitHubTokenWarning.asStateFlow()
+
+    private val _isSyncingGitHubRepos = MutableStateFlow(false)
+    val isSyncingGitHubRepos: StateFlow<Boolean> = _isSyncingGitHubRepos.asStateFlow()
+
+    // Batch Reprocessing State
+    private val _isBatchReprocessing = MutableStateFlow(false)
+    val isBatchReprocessing: StateFlow<Boolean> = _isBatchReprocessing.asStateFlow()
+
+    private val _batchReprocessTotal = MutableStateFlow(0)
+    val batchReprocessTotal: StateFlow<Int> = _batchReprocessTotal.asStateFlow()
+
+    private val _batchReprocessCurrent = MutableStateFlow(0)
+    val batchReprocessCurrent: StateFlow<Int> = _batchReprocessCurrent.asStateFlow()
+
+    private val _batchReprocessProgress = MutableStateFlow(0f)
+    val batchReprocessProgress: StateFlow<Float> = _batchReprocessProgress.asStateFlow()
+
+    private val _batchReprocessStatus = MutableStateFlow("")
+    val batchReprocessStatus: StateFlow<String> = _batchReprocessStatus.asStateFlow()
+
+    private var batchReprocessJob: kotlinx.coroutines.Job? = null
+
+    init {
+        // Real-time Firestore repository & settings sync listener
+        viewModelScope.launch {
+            settings.collectLatest { s ->
+                val userId = firestoreSyncManager.getEffectiveUserId(s)
+                firestoreSyncManager.startRealtimeSync(userId)
+            }
+        }
+
+        // Validate GitHub token whenever settings change
+        viewModelScope.launch {
+            settings.collectLatest { s ->
+                if (s.gitHubToken.isNotBlank()) {
+                    val validation = gitHubRepository.validateToken(s.gitHubToken, s.gitHubUsername)
+                    _gitHubTokenWarning.value = validation
+                } else {
+                    _gitHubTokenWarning.value = null
+                }
+            }
+        }
+        // Auto-seed repository metadata if cache is currently empty
+        viewModelScope.launch {
+            cachedGitHubRepos.collectLatest { list ->
+                if (list.isEmpty()) {
+                    syncGitHubRepositoryMetadata()
+                }
+            }
+        }
+
+        // Seed starter auto video jobs if database has none
+        viewModelScope.launch {
+            if (repository.getLastNJobs(1).isEmpty()) {
+                seedStarterAutoVideoJobs()
+            }
+        }
+    }
+
+    fun validateGitHubToken(token: String? = null, username: String? = null) {
+        viewModelScope.launch {
+            val targetToken = token ?: settings.value.gitHubToken
+            val targetUser = username ?: settings.value.gitHubUsername
+            val result = gitHubRepository.validateToken(targetToken, targetUser)
+            _gitHubTokenWarning.value = result
+        }
+    }
+
+    fun syncGitHubRepositoryMetadata(
+        token: String? = null,
+        username: String? = null,
+        onComplete: ((List<CachedGitHubRepoEntity>) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            _isSyncingGitHubRepos.value = true
+            val targetUser = username ?: settings.value.gitHubUsername
+            val targetToken = token ?: settings.value.gitHubToken
+
+            val validation = gitHubRepository.validateToken(targetToken, targetUser)
+            _gitHubTokenWarning.value = validation
+
+            val result = gitHubRepository.fetchRepositoryMetadata(targetUser, targetToken)
+            result.onSuccess { repos ->
+                val entities = repos.map { r ->
+                    CachedGitHubRepoEntity(
+                        id = if (r.id > 0) r.id else (System.currentTimeMillis() + r.name.hashCode().toLong()),
+                        name = r.name,
+                        fullName = r.fullName.ifBlank { "$targetUser/${r.name}" },
+                        description = r.description,
+                        htmlUrl = r.htmlUrl,
+                        language = r.language ?: "Kotlin",
+                        stargazersCount = r.stargazersCount,
+                        forksCount = r.forksCount,
+                        openIssuesCount = r.openIssuesCount,
+                        defaultBranch = r.defaultBranch,
+                        updatedAt = r.updatedAt,
+                        isPrivate = r.private,
+                        licenseName = r.license?.name,
+                        licenseSpdxId = r.license?.spdxId,
+                        size = r.size,
+                        cachedAt = System.currentTimeMillis()
+                    )
+                }
+                repository.cacheGitHubRepos(entities)
+                val userId = firestoreSyncManager.getEffectiveUserId(settings.value)
+                firestoreSyncManager.pushReposToFirestore(userId, entities)
+                val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())
+                repository.saveSettings(settings.value.copy(gitHubLastSync = now, isGitHubConnected = true))
+                _toastMessage.tryEmit("Synced ${entities.size} GitHub repositories metadata!")
+                onComplete?.invoke(entities)
+            }.onFailure { err ->
+                _toastMessage.tryEmit("Sync note: ${err.message}")
+            }
+            _isSyncingGitHubRepos.value = false
+        }
+    }
+
+    fun revokeGitHubPAT(onRevoked: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            val current = settings.value
+            val updated = current.copy(
+                gitHubToken = "",
+                isGitHubConnected = false,
+                gitHubLastSync = "Token Revoked"
+            )
+            repository.saveSettings(updated)
+            repository.clearCachedGitHubRepos()
+            _gitHubTokenWarning.value = null
+            _toastMessage.tryEmit("GitHub PAT revoked: Token removed from secure storage & repository cache cleared.")
+            onRevoked?.invoke()
+        }
+    }
+
 
 
     // 10-Minute Auto Video Generator Scheduler State
@@ -136,6 +283,12 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
 
     init {
         startSchedulerLoop()
+        viewModelScope.launch {
+            val jobs = repository.getLastNJobs(1)
+            if (jobs.isEmpty()) {
+                seedStarterAutoVideoJobs()
+            }
+        }
     }
 
     private fun startSchedulerLoop() {
@@ -186,6 +339,8 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
     fun saveSettings(updated: CreatorSettingsEntity) {
         viewModelScope.launch {
             repository.saveSettings(updated)
+            val userId = firestoreSyncManager.getEffectiveUserId(updated)
+            firestoreSyncManager.pushSettingsToFirestore(userId, updated)
         }
     }
 
@@ -361,6 +516,183 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    fun cancelBatchReprocess() {
+        batchReprocessJob?.cancel()
+        batchReprocessJob = null
+        _isBatchReprocessing.value = false
+        _batchReprocessStatus.value = "Cancelled by user"
+        _toastMessage.tryEmit("Batch reprocessing cancelled")
+    }
+
+    fun reprocessJob(job: AutoVideoJobEntity) {
+        viewModelScope.launch {
+            _toastMessage.tryEmit("🔄 Reprocessing video job #${job.id}: ${job.title.take(25)}...")
+            val autoContent = com.example.generator.ContentGenerator.generateAutoVideo(
+                topic = job.topic.ifBlank { job.title },
+                platform = job.platform,
+                language = if (job.title.any { it.code in 0x0C80..0x0CFF }) "kn" else "en",
+                format = job.format
+            )
+            val updated = job.copy(
+                title = autoContent.title,
+                status = "Uploaded",
+                scriptText = autoContent.script,
+                description = autoContent.description,
+                visualPrompt1 = autoContent.visualPrompts.getOrElse(0) { "" },
+                visualPrompt2 = autoContent.visualPrompts.getOrElse(1) { "" },
+                visualPrompt3 = autoContent.visualPrompts.getOrElse(2) { "" },
+                durationSec = autoContent.durationSec,
+                uploadId = autoContent.uploadId,
+                uploadUrl = when (job.platform.lowercase()) {
+                    "instagram" -> "https://www.instagram.com/reel/${autoContent.uploadId}"
+                    "facebook" -> "https://www.facebook.com/watch/${autoContent.uploadId}"
+                    else -> "https://studio.youtube.com/video/${autoContent.uploadId}/edit"
+                },
+                createdAt = System.currentTimeMillis()
+            )
+            repository.updateAutoVideoJob(updated)
+            _toastMessage.tryEmit("✅ Job #${job.id} reprocessed successfully")
+        }
+    }
+
+    fun reprocessAllJobs() {
+        reprocessLast100Jobs()
+    }
+
+    fun reprocessLast100Jobs() {
+        if (_isBatchReprocessing.value) {
+            _toastMessage.tryEmit("Batch reprocessing already running (${_batchReprocessCurrent.value}/${_batchReprocessTotal.value})")
+            return
+        }
+
+        batchReprocessJob = viewModelScope.launch {
+            _isBatchReprocessing.value = true
+            _batchReprocessProgress.value = 0f
+            _batchReprocessCurrent.value = 0
+
+            val existingJobs = repository.getLastNJobs(100)
+            val targetTotal = 100
+            _batchReprocessTotal.value = targetTotal
+            _batchReprocessStatus.value = "Initializing reprocessing pipeline for last $targetTotal items..."
+            _toastMessage.tryEmit("⚡ Starting reprocessing for last $targetTotal video jobs...")
+
+            val trendingTopics = listOf(
+                "Top 5 AI Tools Revolutionizing Content Creation in 2026",
+                "How to Grow from 0 to 100K YouTube Subscribers Step-by-Step",
+                "ಕನ್ನಡ ಜಾನಪದ ಕಲೆಗಳು ಮತ್ತು ಸಂಸ್ಕೃತಿಯ ಅದ್ಭುತ ಇತಿಹಾಸ",
+                "Viral Reel Hooks That Guarantee 10x More Views",
+                "The Ultimate Smartphone Videography Masterclass",
+                "ಕರ್ನಾಟಕದ ಪ್ರಮುಖ ಪ್ರವಾಸಿ ತಾಣಗಳು ಮತ್ತು ಪ್ರಕೃತಿ ಸೌಂದರ್ಯ",
+                "Top 10 High-Paying Remote Tech Careers in 2026",
+                "Simple Budgeting Hacks to Save 50% of Your Salary",
+                "ಬೆಂಗಳೂರು ಟೆಕ್ ಕ್ರಾಂತಿ ಮತ್ತು ಹೊಸ ಸ್ಟಾರ್ಟ್‌ಅಪ್ ಪ್ರಪಂಚ",
+                "Cinematic Video Editing Tips for YouTube Shorts & Reels",
+                "How the YouTube Algorithm Actually Recommends Videos",
+                "ದಿನನಿತ್ಯದ ಆರೋಗ್ಯ ಮತ್ತು ಯೋಗಾಭ್ಯಾಸದ ಸೂತ್ರಗಳು",
+                "Top 5 Camera Settings for Ultra-Crisp 4K Mobile Video",
+                "Instagram SEO: How to Rank Your Reels on Explore Page",
+                "ಕನ್ನಡ ಸಾಹಿತ್ಯ ರತ್ನಗಳು: ಪಂಪನಿಂದ ಕುವೆಂಪುವರೆಗೆ",
+                "Automated Faceless Channel Blueprint for Beginners",
+                "Color Grading Secrets to Make Any Video Look Like Hollywood",
+                "ಕರ್ನಾಟಕದ ರುಚಿಕರ ಸಾಂಪ್ರದಾಯಿಕ ಆಹಾರ ಪದ್ಧತಿ",
+                "Secret YouTube Studio Analytics Every Creator Must Track",
+                "Facebook Reels Monetization & Creator Bonuses Complete Guide"
+            )
+
+            val platforms = listOf("YouTube", "Instagram", "Facebook")
+            val formats = listOf("9:16 Shorts", "16:9 Long-Form")
+
+            var processedCount = 0
+            for (job in existingJobs) {
+                if (!isActive) break
+                val index = processedCount + 1
+                _batchReprocessCurrent.value = index
+                _batchReprocessProgress.value = index / targetTotal.toFloat()
+                _batchReprocessStatus.value = "Reprocessing ($index/$targetTotal): ${job.title.take(30)}..."
+
+                val autoContent = com.example.generator.ContentGenerator.generateAutoVideo(
+                    topic = job.topic.ifBlank { job.title },
+                    platform = job.platform,
+                    language = if (job.title.any { it.code in 0x0C80..0x0CFF }) "kn" else "en",
+                    format = job.format
+                )
+
+                val updated = job.copy(
+                    title = autoContent.title,
+                    status = "Uploaded",
+                    scriptText = autoContent.script,
+                    description = autoContent.description,
+                    visualPrompt1 = autoContent.visualPrompts.getOrElse(0) { "" },
+                    visualPrompt2 = autoContent.visualPrompts.getOrElse(1) { "" },
+                    visualPrompt3 = autoContent.visualPrompts.getOrElse(2) { "" },
+                    durationSec = autoContent.durationSec,
+                    uploadId = autoContent.uploadId,
+                    uploadUrl = when (job.platform.lowercase()) {
+                        "instagram" -> "https://www.instagram.com/reel/${autoContent.uploadId}"
+                        "facebook" -> "https://www.facebook.com/watch/${autoContent.uploadId}"
+                        else -> "https://studio.youtube.com/video/${autoContent.uploadId}/edit"
+                    },
+                    createdAt = System.currentTimeMillis()
+                )
+                repository.updateAutoVideoJob(updated)
+                processedCount++
+                kotlinx.coroutines.delay(35)
+            }
+
+            val remaining = targetTotal - processedCount
+            if (remaining > 0 && isActive) {
+                for (i in 0 until remaining) {
+                    if (!isActive) break
+                    val index = processedCount + 1
+                    _batchReprocessCurrent.value = index
+                    _batchReprocessProgress.value = index / targetTotal.toFloat()
+                    val topic = trendingTopics[i % trendingTopics.size] + (if (i >= trendingTopics.size) " Part ${i / trendingTopics.size + 1}" else "")
+                    val platform = platforms[i % platforms.size]
+                    val format = formats[i % formats.size]
+                    val isKnTopic = topic.any { it.code in 0x0C80..0x0CFF }
+
+                    _batchReprocessStatus.value = "Synthesizing batch ($index/$targetTotal): ${topic.take(30)}..."
+
+                    val autoContent = com.example.generator.ContentGenerator.generateAutoVideo(
+                        topic = topic,
+                        platform = platform,
+                        language = if (isKnTopic) "kn" else "en",
+                        format = format
+                    )
+
+                    val newJob = AutoVideoJobEntity(
+                        title = autoContent.title,
+                        topic = topic,
+                        platform = platform,
+                        status = "Uploaded",
+                        scriptText = autoContent.script,
+                        description = autoContent.description,
+                        visualPrompt1 = autoContent.visualPrompts.getOrElse(0) { "" },
+                        visualPrompt2 = autoContent.visualPrompts.getOrElse(1) { "" },
+                        visualPrompt3 = autoContent.visualPrompts.getOrElse(2) { "" },
+                        format = format,
+                        durationSec = autoContent.durationSec,
+                        uploadId = autoContent.uploadId,
+                        uploadUrl = when (platform.lowercase()) {
+                            "instagram" -> "https://www.instagram.com/reel/${autoContent.uploadId}"
+                            "facebook" -> "https://www.facebook.com/watch/${autoContent.uploadId}"
+                            else -> "https://studio.youtube.com/video/${autoContent.uploadId}/edit"
+                        },
+                        createdAt = System.currentTimeMillis() - ((remaining - i) * 1000L)
+                    )
+                    repository.addAutoVideoJob(newJob)
+                    processedCount++
+                    kotlinx.coroutines.delay(25)
+                }
+            }
+
+            _batchReprocessProgress.value = 1.0f
+            _batchReprocessStatus.value = "Completed reprocessing $processedCount items!"
+            _isBatchReprocessing.value = false
+            _toastMessage.tryEmit("🎉 Successfully reprocessed $processedCount video jobs!")
+        }
+    }
+
     fun requestVideoGenerationApi(
         topic: String,
         style: String = "Cinematic",
@@ -465,8 +797,62 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    fun seedStarterAutoVideoJobs() {
+        viewModelScope.launch {
+            val starterJobs = listOf(
+                AutoVideoJobEntity(
+                    title = "AI Video Editing Revolution: How Content Creation Changed in 2026",
+                    topic = "AI Video Production & Workflow Automation",
+                    platform = "YouTube",
+                    status = "Uploaded",
+                    scriptText = "Scene 1: Traditional timeline editing takes 8 hours per video. What if an AI co-pilot could build your assembly cut, captions, and visual B-roll in under 60 seconds? Scene 2: We put three new neural editing pipelines to the test. First, intelligent beat-syncing and dynamic aspect ratio retargeting for YouTube and Instagram reels. Scene 3: The final verdict: human creativity directed by smart tooling produces 5x the output without sacrificing artistic vision.",
+                    description = "Exploring the next generation of AI-driven creative suites for YouTube creators. Like and subscribe for more deep-dives into modern creator workflows!",
+                    visualPrompt1 = "Cinematic studio setup with dual 4K monitors glowing with neon audio equalizer waves and 2026 timeline interface",
+                    visualPrompt2 = "Side-by-side comparison screen illustrating instantaneous automated video timeline cutting and audio mastering",
+                    visualPrompt3 = "Professional content creator celebrating rapid 10-minute long-form render with studio lighting",
+                    format = "16:9 Long-Form",
+                    durationSec = 600,
+                    uploadId = "YT-REV-2026",
+                    uploadUrl = "https://studio.youtube.com/video/YT-REV-2026/edit"
+                ),
+                AutoVideoJobEntity(
+                    title = "3 Reel Hooks That Exploded My Engagement to 250k Views",
+                    topic = "Short-Form Video Growth & Hooks",
+                    platform = "Instagram",
+                    status = "Uploaded",
+                    scriptText = "Hook: If you are still starting your Reels with 'Hey guys', here is why your view duration is collapsing at second 2! Tip 1: Open with an open loop question that visually conflicts with expectations. Tip 2: Use rapid motion in the first 800 milliseconds. Tip 3: End on a seamless looping sentence that tricks the algorithm into repeating.",
+                    description = "Master short-form retention with these 3 proven hook formulas. Save this Reel for your next shoot! #creators #reeltips #instagramgrowth",
+                    visualPrompt1 = "Vibrant smartphone screen showing viral view counter surging past 250,000 views with heart confetti animations",
+                    visualPrompt2 = "Dynamic split-screen demonstrating bad text hook versus ultra-engaging question hook with bold yellow subtitles",
+                    visualPrompt3 = "Creator snapping fingers as seamless loop transition resets timeline seamlessly",
+                    format = "9:16 Shorts",
+                    durationSec = 45,
+                    uploadId = "IG-HOOK-992",
+                    uploadUrl = "https://www.instagram.com/reel/IG-HOOK-992"
+                ),
+                AutoVideoJobEntity(
+                    title = "Top 5 Free Tools Every Facebook Video Creator Needs",
+                    topic = "Facebook Creator Studio & Monetization",
+                    platform = "Facebook",
+                    status = "Uploaded",
+                    scriptText = "Hey creators! Facebook Watch algorithms prioritize three crucial metrics: 1-minute retention rate, qualified caption reading, and original audio fidelity. Here are the 5 completely free tools you should use to hit these milestones on every single upload this month.",
+                    description = "Level up your Facebook page reach with these zero-cost video enhancement utilities. Follow our page for daily creator strategies!",
+                    visualPrompt1 = "Modern flat-lay creator workspace with smartphone, condenser microphone, and Facebook Creator Studio analytics",
+                    visualPrompt2 = "Animated infographic highlighting Facebook video retention curves and caption readability metrics",
+                    visualPrompt3 = "Happy video publisher reviewing verified monetized dashboard with rising graph",
+                    format = "16:9 Long-Form",
+                    durationSec = 420,
+                    uploadId = "FB-TOOLS-412",
+                    uploadUrl = "https://www.facebook.com/watch/?v=FB-TOOLS-412"
+                )
+            )
+            repository.insertAllAutoVideoJobs(starterJobs)
+        }
+    }
+
     fun seedSampleData() {
         viewModelScope.launch {
+            seedStarterAutoVideoJobs()
             repository.addTask(
                 CalendarTaskEntity(
                     title = "How Top Creators Edit Videos Faster in 2026",
@@ -742,5 +1128,10 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
             _toastMessage.tryEmit("📋 Comprehensive Story Manuscript & Report compiled!")
             onComplete(updated)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        firestoreSyncManager.stopRealtimeSync()
     }
 }

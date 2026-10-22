@@ -209,4 +209,25 @@ data class MangaChapterEntity(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "cached_github_repos")
+data class CachedGitHubRepoEntity(
+    @PrimaryKey val id: Long,
+    val name: String,
+    val fullName: String,
+    val description: String? = null,
+    val htmlUrl: String,
+    val language: String? = "Kotlin",
+    val stargazersCount: Int = 0,
+    val forksCount: Int = 0,
+    val openIssuesCount: Int = 0,
+    val defaultBranch: String = "main",
+    val updatedAt: String? = null,
+    val isPrivate: Boolean = false,
+    val licenseName: String? = null,
+    val licenseSpdxId: String? = null,
+    val size: Int = 0,
+    val cachedAt: Long = System.currentTimeMillis()
+)
+
+
 

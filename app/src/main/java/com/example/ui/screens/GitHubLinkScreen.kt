@@ -20,10 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.*
@@ -31,7 +33,10 @@ import com.example.data.github.GitHubRepo
 import com.example.data.github.GitHubRepository
 import com.example.data.github.GitHubSyncResult
 import com.example.data.github.GitHubUser
+import com.example.data.github.GitHubTokenValidationResult
 import com.example.i18n.I18n
+import com.example.ui.components.GitHubPATWarningBanner
+import com.example.ui.components.GitHubRepoDetailDialog
 import com.example.ui.components.VideoGenerationProgressIndicator
 import com.example.ui.theme.StudioCrimson
 import kotlinx.coroutines.launch
@@ -44,9 +49,12 @@ fun GitHubLinkScreen(
     calendarTasks: List<CalendarTaskEntity>,
     savedScripts: List<SavedScriptEntity>,
     onSaveSettings: (CreatorSettingsEntity) -> Unit,
+    onRevokeGitHubPAT: () -> Unit = {},
+    gitHubTokenWarning: GitHubTokenValidationResult? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val isKn = currentLanguage == I18n.LANG_KN
     val gitHubRepoManager = remember { GitHubRepository() }
@@ -55,6 +63,10 @@ fun GitHubLinkScreen(
     var repoInput by remember { mutableStateOf(settings.gitHubRepo) }
     var branchInput by remember { mutableStateOf(settings.gitHubBranch) }
     var tokenInput by remember { mutableStateOf(settings.gitHubToken) }
+    var isTokenMasked by remember { mutableStateOf(true) }
+    var showRevokeConfirmation by remember { mutableStateOf(false) }
+    var selectedRepoForDetail by remember { mutableStateOf<CachedGitHubRepoEntity?>(null) }
+    var localTokenWarning by remember { mutableStateOf(gitHubTokenWarning) }
 
     var isSyncing by remember { mutableStateOf(false) }
     var syncStatusText by remember { mutableStateOf("") }
@@ -63,9 +75,14 @@ fun GitHubLinkScreen(
     var userRepos by remember { mutableStateOf<List<GitHubRepo>>(emptyList()) }
     var isLoadingProfile by remember { mutableStateOf(false) }
 
-    // Initial load of profile & repos
-    LaunchedEffect(settings.gitHubUsername) {
+    // Initial load of profile & repos & token validation
+    LaunchedEffect(settings.gitHubUsername, settings.gitHubToken) {
         isLoadingProfile = true
+        if (settings.gitHubToken.isNotBlank()) {
+            localTokenWarning = gitHubRepoManager.validateToken(settings.gitHubToken, settings.gitHubUsername)
+        } else {
+            localTokenWarning = null
+        }
         gitHubRepoManager.fetchUserProfile(settings.gitHubUsername, settings.gitHubToken)
             .onSuccess { userProfile = it }
         gitHubRepoManager.fetchUserRepos(settings.gitHubUsername, settings.gitHubToken)
@@ -213,6 +230,17 @@ fun GitHubLinkScreen(
             }
         }
 
+        // GitHub PAT Warning Banner (Prompt 6)
+        if (localTokenWarning != null) {
+            item {
+                GitHubPATWarningBanner(
+                    validation = localTokenWarning,
+                    onOpenManageToken = { },
+                    onRevokeToken = { showRevokeConfirmation = true }
+                )
+            }
+        }
+
         // Circular progress indicator during sync
         item {
             VideoGenerationProgressIndicator(
@@ -351,34 +379,211 @@ fun GitHubLinkScreen(
                     OutlinedTextField(
                         value = tokenInput,
                         onValueChange = { tokenInput = it },
-                        label = { Text("Personal Access Token (PAT) [Optional]") },
-                        leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        supportingText = { Text("Leave blank to test local simulation, or enter 'ghp_...' for live commits") },
+                        label = { Text("Personal Access Token (PAT)") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Key,
+                                contentDescription = null,
+                                tint = if (tokenInput.isNotBlank()) Color(0xFF2EA44F) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        trailingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { isTokenMasked = !isTokenMasked },
+                                    modifier = Modifier.testTag("github_token_mask_toggle")
+                                ) {
+                                    Icon(
+                                        imageVector = if (isTokenMasked) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = if (isTokenMasked) "Reveal Token" else "Mask Token",
+                                        tint = if (isTokenMasked) MaterialTheme.colorScheme.primary else Color(0xFFF59E0B),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                if (tokenInput.isNotBlank()) {
+                                    IconButton(
+                                        onClick = {
+                                            tokenInput = ""
+                                            Toast.makeText(context, "Token cleared", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.testTag("github_clear_token_btn")
+                                    ) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear Token", modifier = Modifier.size(18.dp))
+                                    }
+                                } else {
+                                    IconButton(
+                                        onClick = {
+                                            val clip = clipboardManager.getText()?.text
+                                            if (!clip.isNullOrBlank()) {
+                                                tokenInput = clip.trim()
+                                                Toast.makeText(context, "Token pasted from clipboard!", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                Toast.makeText(context, "Clipboard is empty. Copy your token first.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.testTag("github_paste_token_button")
+                                    ) {
+                                        Icon(Icons.Default.ContentPaste, contentDescription = "Paste Token", tint = StudioCrimson)
+                                    }
+                                }
+                            }
+                        },
+                        visualTransformation = if (isTokenMasked) PasswordVisualTransformation() else VisualTransformation.None,
+                        supportingText = {
+                            if (tokenInput.isNotBlank()) {
+                                Text(
+                                    text = if (isTokenMasked) "🔒 Token is securely masked when not in use" else "⚠️ Plaintext visible • Mask before sharing screen",
+                                    color = if (isTokenMasked) Color(0xFF2EA44F) else Color(0xFFF59E0B),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            } else {
+                                Text("Leave blank for simulation, or paste your 'ghp_...' token for live commits")
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth().testTag("github_token_input"),
                         singleLine = true
                     )
 
+                    // Security Setting: Mask Token Switch
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Mask PAT for Security",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Obscures characters when not actively editing",
+                                    fontSize = 9.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = isTokenMasked,
+                                onCheckedChange = { isTokenMasked = it },
+                                modifier = Modifier.testTag("github_token_mask_switch")
+                            )
+                        }
+                    }
+
+                    // Quick Token Actions Row (Paste, Generate Link, Quick Demo)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                val clip = clipboardManager.getText()?.text
+                                if (!clip.isNullOrBlank()) {
+                                    tokenInput = clip.trim()
+                                    Toast.makeText(context, "Token pasted from clipboard!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Clipboard is empty. Copy your GitHub PAT first.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1f).testTag("github_paste_clipboard_action_btn")
+                        ) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Paste", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                openUrl("https://github.com/settings/tokens/new?scopes=repo&description=CreatorStudioSync")
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1.3f).testTag("github_generate_token_link_button")
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Generate on GitHub", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                tokenInput = "ghp_creator_studio_punithjr2_token"
+                                Toast.makeText(context, "Demo token applied for testing!", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1f).testTag("github_use_demo_token_button")
+                        ) {
+                            Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFFF59E0B))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Demo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Action Buttons Row: Save & Sync Now, Save Config, Open Repo
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
+                            onClick = {
+                                handleSaveConfig()
+                                handleSyncAllData()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2EA44F)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1.3f).testTag("github_save_and_sync_button")
+                        ) {
+                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Save & Sync", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
                             onClick = { handleSaveConfig() },
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f).testTag("github_save_config_button")
                         ) {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Save Config")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Save", fontSize = 12.sp)
                         }
 
                         FilledTonalButton(
                             onClick = { openUrl("https://github.com/${usernameInput.trim()}/${repoInput.trim()}") },
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.testTag("github_open_repo_button")
                         ) {
                             Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Open Repo")
+                            Text("Repo", fontSize = 12.sp)
+                        }
+                    }
+
+                    if (tokenInput.isNotBlank() || settings.isGitHubConnected) {
+                        OutlinedButton(
+                            onClick = { showRevokeConfirmation = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("github_revoke_token_button")
+                        ) {
+                            Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("REVOKE GITHUB PAT & CLEAR LOCAL CACHE", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                         }
                     }
                 }
@@ -398,7 +603,22 @@ fun GitHubLinkScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
+                            // Live status chip
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (tokenInput.isNotBlank()) Color(0xFF2EA44F).copy(alpha = 0.2f) else Color(0xFFF59E0B).copy(alpha = 0.2f),
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            ) {
+                                Text(
+                                    text = if (tokenInput.isNotBlank()) "🟢 LIVE REMOTE COMMIT READY" else "🟡 LOCAL SIMULATION (ADD TOKEN FOR REMOTE)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (tokenInput.isNotBlank()) Color(0xFF2E7D32) else Color(0xFFB45309),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+
                             Text(
                                 text = "Push App Data to GitHub",
                                 fontSize = 16.sp,
@@ -406,7 +626,7 @@ fun GitHubLinkScreen(
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = "Commits ${projects.size} projects, ${calendarTasks.size} tasks, and scripts",
+                                text = "Commits ${projects.size} projects, ${calendarTasks.size} tasks, and scripts to $repoInput ($branchInput)",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )
@@ -452,6 +672,19 @@ fun GitHubLinkScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+                                if (syncResult?.fileUrl != null) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    OutlinedButton(
+                                        onClick = { openUrl(syncResult?.fileUrl!!) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.testTag("github_view_committed_file_btn")
+                                    ) {
+                                        Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("View File on GitHub", fontSize = 11.sp)
+                                    }
+                                }
                             }
                         }
                     }
@@ -471,6 +704,16 @@ fun GitHubLinkScreen(
 
         items(userRepos) { repo ->
             val isCurrent = repo.name.equals(repoInput, ignoreCase = true)
+            val langColor = when (repo.language?.lowercase()) {
+                "kotlin" -> Color(0xFF7F52FF)
+                "typescript" -> Color(0xFF3178C6)
+                "python" -> Color(0xFF3572A5)
+                "javascript" -> Color(0xFFF7DF1E)
+                "go" -> Color(0xFF00ADD8)
+                "rust" -> Color(0xFFDEA584)
+                else -> Color(0xFF6E7681)
+            }
+
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
@@ -487,6 +730,23 @@ fun GitHubLinkScreen(
                         repoInput = repo.name
                         branchInput = repo.defaultBranch
                         handleSaveConfig()
+                        selectedRepoForDetail = CachedGitHubRepoEntity(
+                            id = repo.id,
+                            name = repo.name,
+                            fullName = repo.fullName,
+                            description = repo.description,
+                            htmlUrl = repo.htmlUrl,
+                            language = repo.language ?: "Kotlin",
+                            stargazersCount = repo.stargazersCount,
+                            forksCount = repo.forksCount,
+                            openIssuesCount = repo.openIssuesCount,
+                            defaultBranch = repo.defaultBranch,
+                            updatedAt = repo.updatedAt,
+                            isPrivate = repo.private,
+                            licenseName = repo.license?.name,
+                            licenseSpdxId = repo.license?.spdxId,
+                            size = repo.size
+                        )
                     }
                     .testTag("github_repo_item_${repo.name}")
             ) {
@@ -531,19 +791,98 @@ fun GitHubLinkScreen(
                         }
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(top = 4.dp)
                         ) {
+                            // Primary Language Badge (Prompt 7)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(langColor))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = repo.language ?: "Code", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             Text(text = "⭐ ${repo.stargazersCount}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(text = "🍴 ${repo.forksCount}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(text = "🌿 ${repo.defaultBranch}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
-                    IconButton(onClick = { openUrl(repo.htmlUrl) }) {
-                        Icon(Icons.Default.OpenInNew, contentDescription = "View Repo", modifier = Modifier.size(18.dp))
+                    IconButton(
+                        onClick = {
+                            selectedRepoForDetail = CachedGitHubRepoEntity(
+                                id = repo.id,
+                                name = repo.name,
+                                fullName = repo.fullName,
+                                description = repo.description,
+                                htmlUrl = repo.htmlUrl,
+                                language = repo.language ?: "Kotlin",
+                                stargazersCount = repo.stargazersCount,
+                                forksCount = repo.forksCount,
+                                openIssuesCount = repo.openIssuesCount,
+                                defaultBranch = repo.defaultBranch,
+                                updatedAt = repo.updatedAt,
+                                isPrivate = repo.private,
+                                licenseName = repo.license?.name,
+                                licenseSpdxId = repo.license?.spdxId,
+                                size = repo.size
+                            )
+                        },
+                        modifier = Modifier.testTag("github_repo_view_detail_${repo.name}")
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = "View Repo Details", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
         }
+    }
+
+    // Detailed View Component (Prompt 8)
+    if (selectedRepoForDetail != null) {
+        GitHubRepoDetailDialog(
+            repo = selectedRepoForDetail,
+            onDismiss = { selectedRepoForDetail = null },
+            onSetAsActiveRepo = { name, branch ->
+                repoInput = name
+                branchInput = branch
+                handleSaveConfig()
+            }
+        )
+    }
+
+    // Revoke Token Confirmation Dialog (Prompt 9)
+    if (showRevokeConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showRevokeConfirmation = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Revoke Stored GitHub PAT?") },
+            text = {
+                Text("This will immediately delete your GitHub Personal Access Token from secure storage, disconnect the GitHub sync integration, and clear all local cached repository metadata.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRevokeConfirmation = false
+                        tokenInput = ""
+                        onRevokeGitHubPAT()
+                        val updated = settings.copy(
+                            gitHubToken = "",
+                            isGitHubConnected = false,
+                            gitHubLastSync = "Token Revoked"
+                        )
+                        onSaveSettings(updated)
+                        localTokenWarning = null
+                        Toast.makeText(context, "GitHub PAT revoked and cache cleared.", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("github_confirm_revoke_dialog")
+                ) {
+                    Text("Revoke Token & Clear Cache")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRevokeConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

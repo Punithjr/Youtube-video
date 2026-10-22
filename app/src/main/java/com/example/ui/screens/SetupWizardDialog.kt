@@ -184,6 +184,27 @@ fun SetupWizardDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
+                var doNotShowAgain by remember { mutableStateOf(true) }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Checkbox(
+                        checked = doNotShowAgain,
+                        onCheckedChange = { doNotShowAgain = it },
+                        modifier = Modifier.testTag("wizard_do_not_show_checkbox")
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (isKn) "ಪ್ರತಿ ಬಾರಿ ತೋರಿಸಬೇಡಿ (Do not show every time)" else "Do not show every time on startup",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 // Action buttons
                 Button(
                     onClick = {
@@ -214,8 +235,14 @@ fun SetupWizardDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
+                    onClick = {
+                        if (doNotShowAgain) {
+                            onSaveAndFinish(initialSettings.copy(wizardCompleted = true))
+                        } else {
+                            onDismiss()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("wizard_skip_button")
                 ) {
                     Text(
                         text = if (isKn) "ನಂತರ ಹೊಂದಿಸಿ (Skip for now)" else "Skip for now",

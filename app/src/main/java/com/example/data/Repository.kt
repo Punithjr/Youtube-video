@@ -73,6 +73,18 @@ class CreatorRepository(private val db: AppDatabase) {
         return db.autoVideoJobDao().insertJob(job)
     }
 
+    suspend fun insertAllAutoVideoJobs(jobs: List<AutoVideoJobEntity>): List<Long> {
+        return db.autoVideoJobDao().insertAll(jobs)
+    }
+
+    suspend fun getLastNJobs(limit: Int = 100): List<AutoVideoJobEntity> {
+        return db.autoVideoJobDao().getLastNJobs(limit)
+    }
+
+    suspend fun getJobById(id: Long): AutoVideoJobEntity? {
+        return db.autoVideoJobDao().getJobById(id)
+    }
+
     suspend fun updateAutoVideoJob(job: AutoVideoJobEntity) {
         db.autoVideoJobDao().updateJob(job)
     }
@@ -146,6 +158,15 @@ class CreatorRepository(private val db: AppDatabase) {
     suspend fun updateMangaChapter(chapter: MangaChapterEntity) = db.mangaChapterDao().updateChapter(chapter)
 
     suspend fun deleteMangaChapter(chapter: MangaChapterEntity) = db.mangaChapterDao().deleteChapter(chapter)
+
+    // GitHub Cached Repositories
+    val cachedGitHubRepos: Flow<List<CachedGitHubRepoEntity>> = db.gitHubRepoDao().getAllCachedRepos()
+
+    suspend fun cacheGitHubRepos(repos: List<CachedGitHubRepoEntity>) = db.gitHubRepoDao().insertRepos(repos)
+
+    suspend fun clearCachedGitHubRepos() = db.gitHubRepoDao().clearAllRepos()
+
+    suspend fun getCachedRepoById(id: Long): CachedGitHubRepoEntity? = db.gitHubRepoDao().getRepoById(id)
 }
 
 
