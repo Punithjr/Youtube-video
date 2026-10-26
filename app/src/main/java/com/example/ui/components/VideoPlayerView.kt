@@ -1,6 +1,8 @@
 package com.example.ui.components
 
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -19,8 +21,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -43,9 +49,15 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 /**
- * Compose component 'VideoPlayerView' that wraps Media3 PlayerView to provide
- * playback controls, seamless error-recovery, and an interactive simulated scene
- * preview fallback mode if video streams are unreachable or still generating.
+ * Reusable Media3 VideoPlayer component.
+ * Features:
+ * - Direct local video file preview (content://, file://) and streaming MP4 support
+ * - Time boundary clamping (trimStartMs & trimEndMs)
+ * - ColorMatrix real-time filter grading (Grayscale, Sepia, High-Contrast, Cyberpunk, etc.)
+ * - Safe Zone guide overlays (Shorts, Reels, TikTok)
+ * - Volume adjustments & fade envelopes
+ * - Custom interactive playback controls: play/pause, seek bar, forward/rewind, mute, speed, aspect ratio
+ * - Interactive storyboard fallback if video stream fails or is generating
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -55,18 +67,33 @@ fun VideoPlayerView(
     title: String = "Generated Video Preview",
     aspectRatio: Float = 16f / 9f,
     autoPlay: Boolean = false,
+    filterPreset: VideoFilterPreset = VideoFilterPreset.NONE,
+    safeZoneType: SafeZoneType = SafeZoneType.NONE,
+    trimBounds: Pair<Long, Long>? = null,
+    masterVolume: Float = 1.0f,
+    fadeInSec: Float = 0f,
+    fadeOutSec: Float = 0f,
     sceneMarkers: List<String> = emptyList(),
     visualPrompts: List<String> = emptyList(),
     scriptText: String = "",
+    onPositionChange: (Long) -> Unit = {},
+    onPickLocalVideo: ((String) -> Unit)? = null,
     onSceneSelect: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Local video picker launcher
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { onPickLocalVideo?.invoke(it.toString()) }
+    }
+
     // Player state
     var isPlaying by remember { mutableStateOf(false) }
     var currentPositionMs by remember { mutableLongStateOf(0L) }
-    var durationMs by remember { mutableLongStateOf(60000L) } // default 60s
+    var durationMs by remember { mutableLongStateOf(60000L) }
     var isMuted by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var showControls by remember { mutableStateOf(true) }
@@ -79,7 +106,7 @@ fun VideoPlayerView(
     var playbackErrorMessage by remember { mutableStateOf<String?>(null) }
     var reloadTrigger by remember { mutableIntStateOf(0) }
 
-    // Standard high-reliability sample streams
+    // Standard high-reliability fallback sample streams
     val reliableStreams = remember {
         listOf(
             "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
@@ -91,7 +118,13 @@ fun VideoPlayerView(
     fun sanitizeMediaUri(raw: String?): String {
         if (raw.isNullOrBlank()) return reliableStreams.first()
         val lower = raw.trim().lowercase()
-        // If it's a web link (YouTube studio, Instagram reel page, Facebook video page)
+
+        // Local content URIs or file paths are valid media items
+        if (raw.startsWith("content://") || raw.startsWith("file://")) {
+            return raw.trim()
+        }
+
+        // Web links that are HTML pages rather than MP4 streams
         if (lower.contains("studio.youtube.com") || lower.contains("instagram.com/reel") ||
             lower.contains("facebook.com/watch") || lower.contains("youtube.com/watch") ||
             (!lower.endsWith(".mp4") && !lower.endsWith(".mkv") && !lower.endsWith(".webm") && !lower.contains("/sample/"))
@@ -106,7 +139,27 @@ fun VideoPlayerView(
         ExoPlayer.Builder(context).build().apply {
             playWhenReady = autoPlay
             repeatMode = Player.REPEAT_MODE_ALL
+            volume = if (isMuted) 0f else masterVolume
         }
+    }
+
+    // Dynamic volume adjustment with fade envelope
+    LaunchedEffect(masterVolume, isMuted, currentPositionMs, durationMs, fadeInSec, fadeOutSec) {
+        if (isMuted) {
+            exoPlayer.volume = 0f
+            return@LaunchedEffect
+        }
+        val posSec = currentPositionMs / 1000f
+        val durSec = (durationMs / 1000f).coerceAtLeast(1f)
+        val remainingSec = (durSec - posSec).coerceAtLeast(0f)
+
+        var factor = 1.0f
+        if (fadeInSec > 0f && posSec < fadeInSec) {
+            factor = (posSec / fadeInSec).coerceIn(0f, 1f)
+        } else if (fadeOutSec > 0f && remainingSec < fadeOutSec) {
+            factor = (remainingSec / fadeOutSec).coerceIn(0f, 1f)
+        }
+        exoPlayer.volume = (masterVolume * factor).coerceIn(0f, 1f)
     }
 
     // Set or update MediaItem when videoUri or reloadTrigger changes
@@ -150,7 +203,6 @@ fun VideoPlayerView(
                 isBuffering = false
                 isPlaying = false
                 playbackErrorMessage = "Stream buffering error (${error.errorCodeName})"
-                // Auto switch to interactive simulated scene preview so preview is NEVER missing
                 isSceneSimulationMode = true
             }
         }
@@ -176,19 +228,43 @@ fun VideoPlayerView(
         }
     }
 
-    // Simulation ticker: advances position when in scene simulation mode & playing
-    LaunchedEffect(isPlaying, isSceneSimulationMode, playbackSpeed) {
-        while (isPlaying && isSceneSimulationMode) {
-            val stepMs = (100 * playbackSpeed).toLong()
-            currentPositionMs = (currentPositionMs + stepMs)
-            if (currentPositionMs >= durationMs) {
-                currentPositionMs = 0L // loop
+    // Playback ticker + Trimming Boundary Enforcement
+    LaunchedEffect(isPlaying, isSceneSimulationMode, playbackSpeed, trimBounds) {
+        while (isPlaying) {
+            if (isSceneSimulationMode) {
+                val stepMs = (100 * playbackSpeed).toLong()
+                currentPositionMs = (currentPositionMs + stepMs)
+                if (trimBounds != null) {
+                    val (startMs, endMs) = trimBounds
+                    if (currentPositionMs >= endMs || currentPositionMs < startMs) {
+                        currentPositionMs = startMs
+                    }
+                } else if (currentPositionMs >= durationMs) {
+                    currentPositionMs = 0L
+                }
+            } else {
+                val pos = exoPlayer.currentPosition
+                currentPositionMs = pos
+                val d = exoPlayer.duration
+                if (d > 0) durationMs = d
+
+                // Boundary checking
+                if (trimBounds != null) {
+                    val (startMs, endMs) = trimBounds
+                    if (pos >= endMs) {
+                        exoPlayer.seekTo(startMs)
+                        currentPositionMs = startMs
+                    } else if (pos < startMs) {
+                        exoPlayer.seekTo(startMs)
+                        currentPositionMs = startMs
+                    }
+                }
             }
+            onPositionChange(currentPositionMs)
             delay(100)
         }
     }
 
-    // Determine currently active scene index based on playback progress
     val effectiveSceneCount = (if (sceneMarkers.isNotEmpty()) sceneMarkers.size else if (visualPrompts.isNotEmpty()) visualPrompts.size else 3).coerceAtLeast(1)
     val activeSceneIndex = if (durationMs > 0) {
         ((currentPositionMs.toFloat() / durationMs.toFloat()) * effectiveSceneCount).toInt().coerceIn(0, effectiveSceneCount - 1)
@@ -202,6 +278,10 @@ fun VideoPlayerView(
                 exoPlayer.pause()
                 isPlaying = false
             } else {
+                if (trimBounds != null && (currentPositionMs < trimBounds.first || currentPositionMs >= trimBounds.second)) {
+                    exoPlayer.seekTo(trimBounds.first)
+                    currentPositionMs = trimBounds.first
+                }
                 exoPlayer.play()
                 isPlaying = true
             }
@@ -209,25 +289,31 @@ fun VideoPlayerView(
     }
 
     fun seekRelative(deltaMs: Long) {
-        val newPos = (currentPositionMs + deltaMs).coerceIn(0L, durationMs)
+        val minBound = trimBounds?.first ?: 0L
+        val maxBound = trimBounds?.second ?: durationMs
+        val newPos = (currentPositionMs + deltaMs).coerceIn(minBound, maxBound)
         currentPositionMs = newPos
         if (!isSceneSimulationMode) {
             exoPlayer.seekTo(newPos)
         }
+        onPositionChange(newPos)
         showControls = true
     }
 
     fun seekTo(positionMs: Long) {
-        val target = positionMs.coerceIn(0L, durationMs)
+        val minBound = trimBounds?.first ?: 0L
+        val maxBound = trimBounds?.second ?: durationMs
+        val target = positionMs.coerceIn(minBound, maxBound)
         currentPositionMs = target
         if (!isSceneSimulationMode) {
             exoPlayer.seekTo(target)
         }
+        onPositionChange(target)
     }
 
     fun toggleMute() {
         isMuted = !isMuted
-        exoPlayer.volume = if (isMuted) 0f else 1f
+        exoPlayer.volume = if (isMuted) 0f else masterVolume
     }
 
     fun cycleSpeed() {
@@ -255,6 +341,10 @@ fun VideoPlayerView(
         reloadTrigger++
     }
 
+    val activeColorMatrix = remember(filterPreset) {
+        VideoColorMatrixHelper.getColorMatrix(filterPreset)
+    }
+
     Box(
         modifier = modifier
             .testTag("video_player_view")
@@ -269,159 +359,213 @@ fun VideoPlayerView(
             },
         contentAlignment = Alignment.Center
     ) {
-        if (!isSceneSimulationMode) {
-            // Media3 PlayerView inside AndroidView
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = false
-                        layoutParams = android.view.ViewGroup.LayoutParams(
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                            android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        // Video Layer with Color Filter & Blend Mode
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    drawContent()
+                    if (filterPreset != VideoFilterPreset.NONE) {
+                        val (tintColor, blendMode) = when (filterPreset) {
+                            VideoFilterPreset.NONE -> Pair(Color.Transparent, BlendMode.SrcOver)
+                            VideoFilterPreset.GRAYSCALE -> Pair(Color(0xFF888888), BlendMode.Saturation)
+                            VideoFilterPreset.SEPIA -> Pair(Color(0xFF704214).copy(alpha = 0.55f), BlendMode.Color)
+                            VideoFilterPreset.HIGH_CONTRAST -> Pair(Color.Black.copy(alpha = 0.3f), BlendMode.Hardlight)
+                            VideoFilterPreset.CYBERPUNK -> Pair(Color(0xFFE000FF).copy(alpha = 0.35f), BlendMode.Color)
+                            VideoFilterPreset.WARM -> Pair(Color(0xFFFF9900).copy(alpha = 0.3f), BlendMode.Color)
+                            VideoFilterPreset.COOL -> Pair(Color(0xFF00B4D8).copy(alpha = 0.35f), BlendMode.Color)
+                        }
+                        drawRect(
+                            color = tintColor,
+                            blendMode = blendMode
                         )
                     }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            // Interactive Studio Visual Scene Preview Mode (Simulated Storyboard Canvas)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color(0xFF0F172A),
-                                Color(0xFF1E1B4B),
-                                Color(0xFF380D3D)
+                }
+        ) {
+            if (!isSceneSimulationMode) {
+                // Media3 PlayerView inside AndroidView
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = exoPlayer
+                            useController = false
+                            layoutParams = android.view.ViewGroup.LayoutParams(
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                // Interactive Studio Visual Scene Preview Mode (Simulated Storyboard Canvas)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color(0xFF0F172A),
+                                    Color(0xFF1E1B4B),
+                                    Color(0xFF380D3D)
+                                )
                             )
                         )
-                    )
-                    .padding(14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Scene Badge & Title
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = StudioCrimson.copy(alpha = 0.9f)
+                        // Scene Badge & Title
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            Text(
-                                text = "SCENE ${activeSceneIndex + 1} OF $effectiveSceneCount",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = sceneMarkers.getOrElse(activeSceneIndex) { "Generated Scene ${activeSceneIndex + 1}" },
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-
-                    // Visual prompt card
-                    val activePrompt = visualPrompts.getOrElse(activeSceneIndex) {
-                        "Cinematic 4K shot with vibrant neon rim lighting & high-retention pacing"
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color.White.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                        modifier = Modifier
-                            .fillMaxWidth(0.92f)
-                            .padding(horizontal = 8.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = StudioAmber, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Visual Prompt & B-Roll Cue:", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = StudioAmber)
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = StudioCrimson.copy(alpha = 0.9f)
+                            ) {
+                                Text(
+                                    text = "SCENE ${activeSceneIndex + 1} OF $effectiveSceneCount",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
                             }
-                            Spacer(modifier = Modifier.height(3.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = activePrompt,
-                                fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.9f),
-                                maxLines = 3,
-                                textAlign = TextAlign.Center
+                                text = sceneMarkers.getOrElse(activeSceneIndex) { "Generated Scene ${activeSceneIndex + 1}" },
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
-                    }
 
-                    // Audio equalizer waveform simulation
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.height(18.dp)
-                    ) {
-                        val barHeights = if (isPlaying) {
-                            listOf(14.dp, 8.dp, 18.dp, 11.dp, 16.dp, 9.dp, 15.dp, 7.dp)
-                        } else {
-                            listOf(4.dp, 4.dp, 4.dp, 4.dp, 4.dp, 4.dp, 4.dp, 4.dp)
+                        // Visual prompt card
+                        val activePrompt = visualPrompts.getOrElse(activeSceneIndex) {
+                            "Cinematic 4K shot with vibrant neon rim lighting & high-retention pacing"
                         }
-                        barHeights.forEach { h ->
-                            Box(
-                                modifier = Modifier
-                                    .width(3.dp)
-                                    .height(h)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(StudioEmerald)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (isPlaying) "Playing AI Storyboard" else "Paused",
-                            fontSize = 9.sp,
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    // Spoken voiceover subtitle preview
-                    if (scriptText.isNotBlank()) {
-                        Text(
-                            text = "\"${scriptText.take(110)}${if (scriptText.length > 110) "..." else ""}\"",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            textAlign = TextAlign.Center,
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color.White.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
                             modifier = Modifier
-                                .fillMaxWidth(0.9f)
-                                .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
+                                .fillMaxWidth(0.92f)
+                                .padding(horizontal = 8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = StudioAmber, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "AI Visual Scene Prompt",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = StudioAmber
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = activePrompt,
+                                    fontSize = 11.sp,
+                                    color = Color.White,
+                                    maxLines = 3
+                                )
+                            }
+                        }
+
+                        // Script preview line
+                        if (scriptText.isNotBlank()) {
+                            Text(
+                                text = "\"${scriptText.take(80)}...\"",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.8f),
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            )
+                        }
+
+                        // Mode indicator
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(Icons.Default.Speed, contentDescription = null, tint = StudioEmerald, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Interactive Studio Storyboard • Scrub timeline to preview",
+                                fontSize = 9.sp,
+                                color = StudioEmerald
+                            )
+                        }
                     }
                 }
             }
         }
 
+        // Safe Zone Guide Overlay (Shorts, Reels, TikTok)
+        SafeZoneGuideOverlay(
+            safeZoneType = safeZoneType,
+            modifier = Modifier.fillMaxSize()
+        )
+
         // Buffering Indicator
         if (isBuffering && !isSceneSimulationMode) {
-            CircularProgressIndicator(
-                color = StudioCrimson,
-                strokeWidth = 3.dp,
+            Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .testTag("video_player_buffering_indicator")
-            )
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.6f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = StudioCrimson,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
-        // Overlay Controls
+        // Error Banner
+        if (hasPlaybackError && !isSceneSimulationMode) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color.Red.copy(alpha = 0.85f),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = playbackErrorMessage ?: "Stream unavailable",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "RETRY",
+                        color = Color.Yellow,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.clickable { retryStream() }
+                    )
+                }
+            }
+        }
+
+        // Custom Overlay Controls (Visible on tap)
         AnimatedVisibility(
-            visible = showControls || !isPlaying,
+            visible = showControls,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
@@ -429,10 +573,18 @@ fun VideoPlayerView(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .padding(12.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.7f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.85f)
+                            )
+                        )
+                    )
+                    .padding(10.dp)
             ) {
-                // Top Bar: Title + Mode Toggle + Aspect Ratio + Speed + Mute
+                // Top Bar: Title & Settings
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -460,9 +612,22 @@ fun VideoPlayerView(
                     }
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Pick local video file
+                        IconButton(
+                            onClick = { videoPickerLauncher.launch("video/*") },
+                            modifier = Modifier.size(28.dp).testTag("pick_local_video_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = "Open local video file",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
                         // Switch between Stream & Storyboard mode
                         Surface(
                             onClick = {
@@ -662,6 +827,14 @@ fun VideoPlayerView(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium
                         )
+                        if (trimBounds != null) {
+                            Text(
+                                text = "Trim: ${formatMs(trimBounds.first)} - ${formatMs(trimBounds.second)}",
+                                color = StudioAmber,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         Text(
                             text = formatMs(durationMs),
                             color = Color.White.copy(alpha = 0.7f),

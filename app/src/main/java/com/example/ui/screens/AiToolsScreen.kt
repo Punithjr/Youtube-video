@@ -52,7 +52,8 @@ fun AiToolsScreen(
             AiStudioTool("story", "Story Generator", "Relatable creator narrative for community building", "Behind the Scenes"),
             AiStudioTool("reel", "Reel Generator", "Complete 30-second vertical retention sequence", "Quick Morning Hack"),
             AiStudioTool("shorts", "Shorts Generator", "Fast-paced YouTube Short with visual cut timestamps", "Secret Shortcut"),
-            AiStudioTool("script", "Script Generator", "Structured script with hook, body, and conclusion", "How to Speak on Camera")
+            AiStudioTool("script", "Script Generator", "Structured script with hook, body, and conclusion", "How to Speak on Camera"),
+            AiStudioTool("opencreator", "OpenCreator Motion Presets", "28 cinematic camera motion blueprints & templates", "Aerial Pullback")
         )
     }
 
@@ -120,6 +121,19 @@ Community discussion on $topic and personal lessons learned.
 
             "thumb_prompt" -> """
 Hyper-detailed 16:9 thumbnail, dramatic split lighting, high-contrast expressive facial expression, neon glowing text reading '$topic', clean cinematic studio depth of field, 8k resolution, photorealistic.
+            """.trimIndent()
+
+            "opencreator" -> """
+🎬 OPENCREATOR 28-PRESET MOTION CATALOG ($topic):
+• Aerial Pullback and Rise Reveal: Smooth backward/upward crane movement along subject axis.
+• Anime Skateboard Chase NYC: Dynamic velocity lines, low camera angle, high shutter speed.
+• Dolly Zoom Space Warp: Vertigo optical effect compressing perspective on '$topic'.
+• Drone Orbit Around Subject: 360-degree fluid horizon tracking with foreground parallax.
+• Retro Illustration Micro-Motion: Nostalgic hand-drawn textures with subtle character breathing.
+• Sci-Fi Motorcycle Action: Rain-slicked asphalt, neon rim lighting, fast pan tracking.
+
+📂 Imported directly from OpenCreator source repository:
+Attachment: public/assets/aistudio/OpenCreator_All_Source_Code_8b88ab46.txt
             """.trimIndent()
 
             else -> """

@@ -556,7 +556,68 @@ class CreatorStudioViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun reprocessAllJobs() {
-        reprocessLast100Jobs()
+        if (_isBatchReprocessing.value) {
+            _toastMessage.tryEmit("Batch reprocessing already running (${_batchReprocessCurrent.value}/${_batchReprocessTotal.value})")
+            return
+        }
+
+        batchReprocessJob = viewModelScope.launch {
+            _isBatchReprocessing.value = true
+            _batchReprocessProgress.value = 0f
+            _batchReprocessCurrent.value = 0
+
+            var allJobs = repository.getLastNJobs(500)
+            if (allJobs.isEmpty()) {
+                seedStarterAutoVideoJobs()
+                allJobs = repository.getLastNJobs(500)
+            }
+            val targetTotal = allJobs.size.coerceAtLeast(1)
+            _batchReprocessTotal.value = targetTotal
+            _batchReprocessStatus.value = "Reprocessing all $targetTotal video jobs..."
+            _toastMessage.tryEmit("⚡ Reprocessing all $targetTotal video jobs...")
+
+            var processedCount = 0
+            for (job in allJobs) {
+                if (!isActive) break
+                val index = processedCount + 1
+                _batchReprocessCurrent.value = index
+                _batchReprocessProgress.value = index / targetTotal.toFloat()
+                _batchReprocessStatus.value = "Reprocessing ($index/$targetTotal): ${job.title.take(30)}..."
+
+                val autoContent = com.example.generator.ContentGenerator.generateAutoVideo(
+                    topic = job.topic.ifBlank { job.title },
+                    platform = job.platform,
+                    language = if (job.title.any { it.code in 0x0C80..0x0CFF }) "kn" else "en",
+                    format = job.format
+                )
+
+                val updated = job.copy(
+                    title = autoContent.title,
+                    status = "Uploaded",
+                    scriptText = autoContent.script,
+                    description = autoContent.description,
+                    visualPrompt1 = autoContent.visualPrompts.getOrElse(0) { "" },
+                    visualPrompt2 = autoContent.visualPrompts.getOrElse(1) { "" },
+                    visualPrompt3 = autoContent.visualPrompts.getOrElse(2) { "" },
+                    durationSec = autoContent.durationSec,
+                    uploadId = autoContent.uploadId,
+                    uploadUrl = when (job.platform.lowercase()) {
+                        "instagram" -> "https://www.instagram.com/reel/${autoContent.uploadId}"
+                        "facebook" -> "https://www.facebook.com/watch/${autoContent.uploadId}"
+                        else -> "https://studio.youtube.com/video/${autoContent.uploadId}/edit"
+                    },
+                    createdAt = System.currentTimeMillis()
+                )
+                repository.updateAutoVideoJob(updated)
+                processedCount++
+                kotlinx.coroutines.delay(20)
+            }
+
+            _batchReprocessProgress.value = 1.0f
+            _batchReprocessStatus.value = "Completed reprocessing all $processedCount items!"
+            _isBatchReprocessing.value = false
+            _toastMessage.tryEmit("🎉 Reprocessed all $processedCount video jobs!")
+        }
     }
 
     fun reprocessLast100Jobs() {

@@ -221,19 +221,21 @@ fun SocialChannelsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Connected Account: ${settings.youTubeHandle}",
+                            text = "Channel: ${settings.youTubeHandle}",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         FilledTonalButton(
                             onClick = { onOpenPlatformLogin("YouTube") },
-                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White.copy(alpha = 0.25f), contentColor = Color.White),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.height(28.dp)
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White.copy(alpha = 0.3f), contentColor = Color.White),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(30.dp).testTag("edit_link_youtube_btn")
                         ) {
-                            Text(if (settings.isYouTubeConnected) "Manage Login" else "Connect Account", fontSize = 10.sp)
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(if (settings.isYouTubeConnected) "Edit Channel Link" else "Link YouTube", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -314,13 +316,16 @@ fun SocialChannelsScreen(
                             fontWeight = FontWeight.Bold,
                             color = InstagramGradientPink
                         )
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = { onOpenPlatformLogin("Instagram") },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.height(28.dp)
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = InstagramGradientPink.copy(alpha = 0.15f), contentColor = InstagramGradientPink),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(30.dp).testTag("edit_link_instagram_btn")
                         ) {
-                            Text(if (settings.isInstagramConnected) "Manage Login" else "Connect Account", fontSize = 10.sp)
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(if (settings.isInstagramConnected) "Edit Profile Link" else "Link Instagram", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -377,13 +382,16 @@ fun SocialChannelsScreen(
                             fontWeight = FontWeight.Bold,
                             color = FacebookBlue
                         )
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = { onOpenPlatformLogin("Facebook") },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.height(28.dp)
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = FacebookBlue.copy(alpha = 0.15f), contentColor = FacebookBlue),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(30.dp).testTag("edit_link_facebook_btn")
                         ) {
-                            Text(if (settings.isFacebookConnected) "Manage Login" else "Connect Account", fontSize = 10.sp)
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(if (settings.isFacebookConnected) "Edit Page Link" else "Link Facebook", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 

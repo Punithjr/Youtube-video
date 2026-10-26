@@ -47,6 +47,7 @@ val AllNavItems = listOf(
     NavItem("ai_tools", "nav_ai_tools", Icons.Default.AutoAwesome),
     NavItem("social_channels", "nav_social_channels", Icons.Default.Share),
     NavItem("video_editor", "nav_video_editor", Icons.Default.MovieFilter, "AI + PLAYER"),
+    NavItem("opencreator_hub", "nav_opencreator_hub", Icons.Default.Hub, "28 PRESETS"),
     NavItem("manga_studio", "nav_manga_studio", Icons.Default.AutoStories, "MANGA + AI"),
     NavItem("github_link", "nav_github_link", Icons.Default.Code, "GIT SYNC"),
     NavItem("backup_restore", "nav_backup_restore", Icons.Default.Backup),

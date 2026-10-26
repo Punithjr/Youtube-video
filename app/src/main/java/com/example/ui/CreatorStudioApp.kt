@@ -55,6 +55,8 @@ fun CreatorStudioApp(
     var showWizardDialog by remember { mutableStateOf(false) }
     var showUserLoginDialog by remember { mutableStateOf(false) }
     var selectedPlatformForLogin by remember { mutableStateOf<String?>(null) }
+    var scriptGenInitialTopic by remember { mutableStateOf<String?>(null) }
+    var scriptGenInitialFramework by remember { mutableStateOf<String?>(null) }
 
     // First run wizard trigger: if wizardCompleted is false, show wizard
     LaunchedEffect(settings.wizardCompleted) {
@@ -178,7 +180,9 @@ fun CreatorStudioApp(
 
                     "script_gen" -> ScriptGeneratorScreen(
                         currentLanguage = currentLang,
-                        onSaveScript = { viewModel.addScript(it) }
+                        onSaveScript = { viewModel.addScript(it) },
+                        initialTopic = scriptGenInitialTopic,
+                        initialFramework = scriptGenInitialFramework
                     )
 
                     "thumbnail_creator" -> ThumbnailCreatorScreen(
@@ -266,7 +270,27 @@ fun CreatorStudioApp(
                         onUpdateGlobalProgress = { prog, sub ->
                             viewModel.updateGlobalVideoProgress(prog, sub)
                         },
-                        onHideGlobalProgress = { viewModel.hideGlobalVideoProgress() }
+                        onHideGlobalProgress = { viewModel.hideGlobalVideoProgress() },
+                        onAddMediaToLibrary = { viewModel.addMedia(it) }
+                    )
+
+                    "opencreator_hub" -> OpenCreatorHubScreen(
+                        currentLanguage = currentLang,
+                        onNavigateToVideoEditorWithPreset = { title, prompt, isVert ->
+                            viewModel.navigateTo("video_editor")
+                        },
+                        onNavigateToScriptGenWithPreset = { topic, fw ->
+                            scriptGenInitialTopic = topic
+                            scriptGenInitialFramework = fw
+                            viewModel.navigateTo("script_gen")
+                        },
+                        onNavigateToThumbnailWithStyle = { style ->
+                            viewModel.navigateTo("thumbnail_creator")
+                        },
+                        isBatchReprocessing = isBatchReprocessing,
+                        batchReprocessProgress = batchReprocessProgress,
+                        batchReprocessStatus = batchReprocessStatus,
+                        onReprocessAll = { viewModel.reprocessAllJobs() }
                     )
 
                     "manga_studio" -> MangaStudioScreen(

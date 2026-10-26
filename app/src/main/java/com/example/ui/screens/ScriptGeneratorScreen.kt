@@ -31,14 +31,17 @@ import com.example.ui.theme.*
 fun ScriptGeneratorScreen(
     currentLanguage: String,
     onSaveScript: (SavedScriptEntity) -> Unit,
+    initialTopic: String? = null,
+    initialFramework: String? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val isKn = currentLanguage == I18n.LANG_KN
 
-    var topic by remember { mutableStateOf("") }
+    var topic by remember(initialTopic) { mutableStateOf(initialTopic ?: "") }
     var selectedPlatform by remember { mutableStateOf("YouTube") }
+    var selectedFramework by remember(initialFramework) { mutableStateOf(initialFramework ?: "standard") }
     var duration by remember { mutableStateOf("60s") }
     var audience by remember { mutableStateOf("General Creators") }
     var tone by remember { mutableStateOf("Engaging & Punchy") }
@@ -47,11 +50,12 @@ fun ScriptGeneratorScreen(
     var generatedScript by remember {
         mutableStateOf(
             ContentGenerator.generateScript(
-                topic = "Social Media Growth Secret",
+                topic = initialTopic ?: "Social Media Growth Secret",
                 platform = "YouTube",
                 language = currentLanguage,
                 duration = "60s",
-                tone = "Engaging"
+                tone = "Engaging",
+                framework = initialFramework ?: "standard"
             )
         )
     }
@@ -85,9 +89,10 @@ fun ScriptGeneratorScreen(
             language = scriptLanguage,
             duration = duration,
             tone = tone,
-            modifier = mod
+            modifier = mod,
+            framework = selectedFramework
         )
-        Toast.makeText(context, "Script regenerated ($mod)!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Script regenerated ($mod)! [Framework: $selectedFramework]", Toast.LENGTH_SHORT).show()
     }
 
     LazyColumn(
@@ -168,6 +173,49 @@ fun ScriptGeneratorScreen(
                                 selected = duration == d,
                                 onClick = { duration = d },
                                 label = { Text(d, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    // OpenCreator Writing Skill Framework
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (isKn) "OpenCreator ಬರವಣಿಗೆ ಚೌಕಟ್ಟು (Writing Skill):" else "OpenCreator Writing Skill:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            color = StudioCrimson.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                "SOURCE SPEC",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                color = StudioCrimson,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val frameworks = listOf(
+                            "standard" to "Standard Viral",
+                            "sun_style" to "Sun-Style (Objects)",
+                            "khazix" to "Khazix (Conversational)",
+                            "deep_insight" to "Deep Insight",
+                            "research" to "Research Paper",
+                            "tutorial" to "Practical Tutorial",
+                            "news" to "News Analysis"
+                        )
+                        items(frameworks) { (id, label) ->
+                            FilterChip(
+                                selected = selectedFramework == id,
+                                onClick = {
+                                    selectedFramework = id
+                                    applyModifier("standard")
+                                },
+                                label = { Text(label, fontSize = 11.sp) }
                             )
                         }
                     }
